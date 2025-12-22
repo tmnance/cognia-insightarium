@@ -43,8 +43,35 @@ router.get('/x', async (req: Request, res: Response) => {
       source: req.session.xUserId ? 'session' : 'query',
     });
     
+    // Get all existing X bookmark IDs to optimize API calls
+    // X bookmarks are returned newest first, so we can stop fetching when we encounter one we already have
+    const existingBookmarks = await prisma.bookmark.findMany({
+      where: {
+        source: 'x',
+        externalId: { not: null },
+      },
+      select: {
+        externalId: true,
+      },
+    });
+
+    const existingBookmarkIds = new Set(
+      existingBookmarks
+        .map((b) => b.externalId)
+        .filter((id): id is string => id !== null)
+    );
+    
+    if (existingBookmarkIds.size > 0) {
+      logger.info('Found existing bookmarks, will stop early when encountering them', { 
+        existingCount: existingBookmarkIds.size,
+      });
+    } else {
+      logger.info('No existing bookmarks found, fetching all bookmarks');
+    }
+    
     // Use session access token if available, otherwise fall back to env config
-    const bookmarks = await fetchXBookmarks(userId, req.session.xAccessToken);
+    // Pass existing bookmark IDs to stop fetching early when we encounter one we already have
+    const bookmarks = await fetchXBookmarks(userId, req.session.xAccessToken, existingBookmarkIds);
 
     const savedBookmarks = [];
     for (const bookmark of bookmarks) {

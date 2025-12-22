@@ -37,14 +37,17 @@ interface XTweet {
  * 
  * @param userId - The X user ID to fetch bookmarks for (required)
  * @param sessionAccessToken - Optional OAuth 2.0 access token from session (preferred)
+ * @param existingBookmarkIds - Optional Set of bookmark IDs we already have (to stop early when encountered)
  * 
  * Note: The bookmarks endpoint requires OAuth 2.0 User Context authentication.
+ * Bookmarks are returned newest first, so we can stop fetching when we encounter one we already have.
  * 
  * API Documentation: https://developer.x.com/en/docs/twitter-api/tweets/bookmarks/api-reference/get-users-id-bookmarks
  */
 export async function fetchXBookmarks(
   userId: string,
-  sessionAccessToken?: string
+  sessionAccessToken?: string,
+  existingBookmarkIds?: Set<string>
 ): Promise<XBookmark[]> {
   try {
     // Priority: session token > env token > bearer token
@@ -62,12 +65,15 @@ export async function fetchXBookmarks(
     logger.info('Fetching bookmarks from X API', { 
       userId, 
       usingSessionToken: !!sessionAccessToken,
-      usingOAuth: !!config.xAccessToken 
+      usingOAuth: !!config.xAccessToken,
+      hasExistingBookmarks: !!existingBookmarkIds && existingBookmarkIds.size > 0,
+      existingCount: existingBookmarkIds?.size || 0,
     });
 
     const bookmarks: XBookmark[] = [];
     let nextToken: string | undefined;
     let requestCount = 0;
+    let shouldContinue = true;
 
     do {
       requestCount++;
@@ -133,28 +139,53 @@ export async function fetchXBookmarks(
 
       // Process tweets
       if (response.data.data) {
-        const tweets = response.data.data.map((tweet) => ({
-          externalId: tweet.id,
-          url: `https://twitter.com/i/web/status/${tweet.id}`,
-          title: tweet.text.substring(0, 100) || undefined,
-          content: tweet.text,
-        }));
+        const tweets: XBookmark[] = [];
+        let foundExisting = false;
+
+        for (const tweet of response.data.data) {
+          // If we have existing bookmarks and we encounter one we already have,
+          // stop fetching (bookmarks are returned newest first)
+          if (existingBookmarkIds && existingBookmarkIds.has(tweet.id)) {
+            logger.info('Encountered existing bookmark, stopping early to save API calls', {
+              existingBookmarkId: tweet.id,
+              requestNumber: requestCount,
+              bookmarksFetched: bookmarks.length,
+            });
+            foundExisting = true;
+            break;
+          }
+
+          tweets.push({
+            externalId: tweet.id,
+            url: `https://twitter.com/i/web/status/${tweet.id}`,
+            title: tweet.text.substring(0, 100) || undefined,
+            content: tweet.text,
+          });
+        }
 
         bookmarks.push(...tweets);
         logger.info(`Fetched ${tweets.length} bookmarks (total: ${bookmarks.length})`, {
           requestNumber: requestCount,
           tweetIds: tweets.map((t) => t.externalId).slice(0, 5), // Log first 5 IDs for reference
+          stoppedEarly: foundExisting,
         });
+
+        // If we found an existing bookmark, stop pagination
+        if (foundExisting) {
+          shouldContinue = false;
+          nextToken = undefined;
+        } else {
+          nextToken = response.data.meta?.next_token;
+        }
       } else {
         logger.warn('X API response has no data field', {
           requestNumber: requestCount,
           responseKeys: Object.keys(response.data),
           fullResponse: response.data,
         });
+        nextToken = response.data.meta?.next_token;
       }
-
-      nextToken = response.data.meta?.next_token;
-    } while (nextToken);
+    } while (nextToken && shouldContinue);
 
     logger.info(`Successfully fetched ${bookmarks.length} X bookmarks`);
     return bookmarks;
