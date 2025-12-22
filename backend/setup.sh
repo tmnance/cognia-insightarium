@@ -29,3 +29,4 @@ npm run prisma:migrate
 
 echo "✅ Setup complete! You can now run 'npm run dev' to start the server."
 
+

@@ -133,10 +133,17 @@ NODE_ENV=development
 # Database
 DATABASE_URL=postgresql://user:password@localhost:5432/cognia_insightarium?schema=public
 
-# X (Twitter) API (optional - for X integration)
-X_API_KEY=
-X_API_SECRET=
-X_BEARER_TOKEN=
+# X (Twitter) OAuth 2.0 (required for X integration)
+# Get these from: https://developer.x.com/en/portal/dashboard
+# Create a Project and App, then get Client ID and Client Secret
+X_API_KEY=your_client_id_here
+X_API_SECRET=your_client_secret_here
+
+# Optional: Session secret (change in production!)
+SESSION_SECRET=your-random-secret-key-here
+
+# Optional: Frontend URL (defaults to http://localhost:3000)
+FRONTEND_URL=http://localhost:3000
 
 # LinkedIn API (optional - for LinkedIn integration)
 LINKEDIN_CLIENT_ID=
@@ -144,7 +151,9 @@ LINKEDIN_CLIENT_SECRET=
 LINKEDIN_ACCESS_TOKEN=
 ```
 
-**Note**: The X and LinkedIn API credentials are optional. The integrations are currently placeholder implementations and will return empty arrays until properly configured.
+**Note**: 
+- **X API**: Uses OAuth 2.0 with a "Login with X" button. See [OAUTH_UI_SETUP.md](./OAUTH_UI_SETUP.md) for detailed setup instructions.
+- **LinkedIn API**: Currently a placeholder implementation. LinkedIn credentials are optional and will return empty arrays until implemented.
 
 ### 4. Start Development Servers
 
@@ -202,7 +211,7 @@ cognia-insightarium/
 ### Bookmarks
 
 - `GET /api/bookmarks` - Get all bookmarks (optional `?source=x` query param)
-- `GET /api/bookmarks/x` - Fetch and save X bookmarks
+- `GET /api/bookmarks/x` - Fetch and save X bookmarks (requires OAuth login)
 - `GET /api/bookmarks/linkedin` - Fetch and save LinkedIn saved posts
 - `POST /api/bookmarks/url` - Add a bookmark from a URL
   ```json
@@ -210,6 +219,13 @@ cognia-insightarium/
     "url": "https://example.com/article"
   }
   ```
+
+### OAuth
+
+- `GET /api/oauth/x/authorize` - Initiate OAuth flow (redirects to X)
+- `GET /api/oauth/x/callback` - OAuth callback (handles X redirect)
+- `GET /api/oauth/x/status` - Check authentication status
+- `POST /api/oauth/x/logout` - Logout and clear session
 
 ### Content
 
@@ -286,11 +302,36 @@ If a duplicate is found, the existing bookmark is returned instead of creating a
 
 ### X (Twitter) API
 
-The X integration is currently a placeholder. To implement:
+The X integration uses **OAuth 2.0** with a user-friendly "Login with X" button. To set it up:
 
-1. Obtain API credentials from X Developer Portal
-2. Add credentials to `backend/.env`
-3. Implement the actual API calls in `backend/src/services/xIntegration.ts`
+1. **Create a Developer Account and App**:
+   - Visit the [X Developer Portal](https://developer.x.com/en/portal/dashboard)
+   - Sign up for a developer account (if you don't have one)
+   - Create a new Project and App
+
+2. **Get OAuth 2.0 Credentials**:
+   - In your app settings, navigate to "Keys and tokens"
+   - Copy your **Client ID** (set as `X_API_KEY`)
+   - Copy your **Client Secret** (set as `X_API_SECRET`)
+   - Add callback URL: `http://localhost:3001/api/oauth/x/callback` (or your production backend URL)
+
+3. **Add to `backend/.env`**:
+   ```env
+   X_API_KEY=your_client_id_here
+   X_API_SECRET=your_client_secret_here
+   ```
+
+4. **Usage**:
+   - Click "Login with X" button in the application
+   - Authorize the app on X
+   - Click "Fetch X Bookmarks" to automatically fetch your bookmarks
+   - No manual user ID entry needed - it's detected automatically from OAuth
+
+**Important Notes**:
+- The bookmarks endpoint requires OAuth 2.0 User Context authentication (not Bearer Token)
+- Sessions are stored server-side and expire after 30 days
+- The integration fetches up to 100 bookmarks per request and handles pagination automatically
+- See [OAUTH_UI_SETUP.md](./OAUTH_UI_SETUP.md) for detailed setup instructions
 
 ### LinkedIn API
 
@@ -299,6 +340,8 @@ The LinkedIn integration is currently a placeholder. To implement:
 1. Create a LinkedIn app and obtain OAuth credentials
 2. Add credentials to `backend/.env`
 3. Implement the actual API calls in `backend/src/services/linkedInIntegration.ts`
+
+**Note**: LinkedIn doesn't have a direct "saved posts" API endpoint, so this integration may require alternative approaches.
 
 ## Future Enhancements
 

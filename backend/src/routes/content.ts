@@ -25,13 +25,13 @@ router.post('/raw', async (req: Request, res: Response) => {
       title: title || undefined,
     });
 
-    res.json({
+    return res.json({
       success: true,
       bookmark,
     });
   } catch (error) {
     logger.error('Error in POST /api/content/raw', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to add raw text content',
     });
