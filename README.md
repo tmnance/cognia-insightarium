@@ -262,6 +262,8 @@ model Bookmark {
 }
 ```
 
+**Note**: The `session` table is automatically created by `connect-pg-simple` to store OAuth sessions. This table is not managed by Prisma but is created automatically when the application starts. Sessions persist across server restarts.
+
 ## Deduplication Logic
 
 The app prevents duplicate entries using a two-step approach:

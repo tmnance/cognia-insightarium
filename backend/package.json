@@ -17,12 +17,15 @@
   "dependencies": {
     "@prisma/client": "^5.20.0",
     "axios": "^1.7.9",
+    "connect-pg-simple": "^10.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
-    "express-session": "^1.18.1"
+    "express-session": "^1.18.1",
+    "pg": "^8.16.3"
   },
   "devDependencies": {
+    "@types/connect-pg-simple": "^7.0.3",
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
     "@types/express-session": "^1.18.0",
@@ -37,4 +40,3 @@
     "typescript": "^5.7.2"
   }
 }
-

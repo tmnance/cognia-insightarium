@@ -85,10 +85,11 @@ Once authenticated:
 
 ## Session Management
 
-- Sessions are stored server-side using `express-session`
+- Sessions are stored in PostgreSQL database (persistent across server restarts)
 - Sessions use secure HTTP-only cookies
 - Session expires after 30 days
 - Tokens are stored in the session, not exposed to the client
+- **Sessions persist across application restarts** - you won't need to login again after restarting the server
 
 ## Security Notes
 
