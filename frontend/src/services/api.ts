@@ -5,7 +5,6 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  withCredentials: true, // Include cookies for session support
 });
 
 export interface Bookmark {
@@ -33,33 +32,6 @@ export const bookmarkApi = {
     const params = source ? { source } : {};
     const response = await api.get<ApiResponse<Bookmark>>('/bookmarks', { params });
     return response.data.bookmarks || [];
-  },
-
-  // Fetch X bookmarks (no userId needed if authenticated via OAuth)
-  fetchX: async (): Promise<Bookmark[]> => {
-    const response = await api.get<ApiResponse<Bookmark>>('/bookmarks/x');
-    return response.data.bookmarks || [];
-  },
-
-  // OAuth endpoints
-  oauth: {
-    // Get OAuth status
-    getStatus: async (): Promise<{ authenticated: boolean; userId: string | null; username: string | null }> => {
-      const response = await api.get<{ success: boolean; authenticated: boolean; userId: string | null; username: string | null }>('/oauth/x/status');
-      return {
-        authenticated: response.data.authenticated,
-        userId: response.data.userId,
-        username: response.data.username,
-      };
-    },
-    // Initiate OAuth login
-    login: (): void => {
-      window.location.href = '/api/oauth/x/authorize';
-    },
-    // Logout
-    logout: async (): Promise<void> => {
-      await api.post('/oauth/x/logout');
-    },
   },
 
   // Fetch LinkedIn saved posts

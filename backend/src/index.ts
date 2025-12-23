@@ -1,50 +1,16 @@
 import express from 'express';
 import cors from 'cors';
-import session from 'express-session';
-import pgSession from 'connect-pg-simple';
-import { Pool } from 'pg';
 import { config } from './config/env';
 import { logger } from './utils/logger';
 import bookmarkRoutes from './routes/bookmarks';
 import contentRoutes from './routes/content';
-import oauthRoutes from './routes/oauth';
 
 const app = express();
 
-// CORS configuration - allow credentials for sessions
+// CORS configuration
 app.use(
   cors({
-    origin: 'http://localhost:3000',
-    credentials: true,
-  })
-);
-
-// PostgreSQL connection pool for session store
-const pgPool = new Pool({
-  connectionString: config.databaseUrl,
-});
-
-// Initialize PostgreSQL session store
-const PGStore = pgSession(session);
-const sessionStore = new PGStore({
-  pool: pgPool,
-  tableName: 'session', // Table name for sessions
-  createTableIfMissing: true, // Automatically create table if it doesn't exist
-});
-
-// Session configuration with PostgreSQL store
-app.use(
-  session({
-    store: sessionStore,
-    secret: process.env.SESSION_SECRET || 'cognia-insightarium-session-secret-change-in-production',
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      secure: config.nodeEnv === 'production',
-      httpOnly: true,
-      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-      sameSite: 'lax',
-    },
+    origin: config.frontendUrl,
   })
 );
 
@@ -65,7 +31,6 @@ app.get('/health', (_req, res) => {
 // API routes
 app.use('/api/bookmarks', bookmarkRoutes);
 app.use('/api/content', contentRoutes);
-app.use('/api/oauth', oauthRoutes);
 
 // Error handling middleware
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
@@ -78,32 +43,8 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
 
 // Start server
 const PORT = config.port;
-const server = app.listen(PORT, () => {
+app.listen(PORT, () => {
   logger.info(`Server running on port ${PORT}`);
   logger.info(`Environment: ${config.nodeEnv}`);
-  logger.info('Sessions are stored in PostgreSQL and will persist across server restarts');
-});
-
-// Graceful shutdown - close database connections
-process.on('SIGTERM', () => {
-  logger.info('SIGTERM received, shutting down gracefully');
-  server.close(() => {
-    logger.info('HTTP server closed');
-    pgPool.end(() => {
-      logger.info('PostgreSQL pool closed');
-      process.exit(0);
-    });
-  });
-});
-
-process.on('SIGINT', () => {
-  logger.info('SIGINT received, shutting down gracefully');
-  server.close(() => {
-    logger.info('HTTP server closed');
-    pgPool.end(() => {
-      logger.info('PostgreSQL pool closed');
-      process.exit(0);
-    });
-  });
 });
 

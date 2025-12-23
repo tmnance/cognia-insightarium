@@ -2,7 +2,7 @@
 
 **Your personal library of insights**
 
-Cognia Insightarium is a personal knowledge collection tool that allows users to capture and manage useful information they come across online. The app pulls in bookmarked/saved content from X (Twitter) and LinkedIn, allows adding custom URLs, and supports raw text or markdown input. All collected items are stored in a structured database and displayed on a dashboard for review and later processing.
+Cognia Insightarium is a personal knowledge collection tool that allows users to capture and manage useful information they come across online. The app supports importing bookmarks via browser bookmarklets, adding custom URLs, and supports raw text or markdown input. All collected items are stored in a structured database and displayed on a dashboard for review and later processing.
 
 ## Product Overview
 
@@ -10,7 +10,7 @@ Our initial focus is **top-of-funnel data capture**, not insight generation or d
 
 ### Features
 
-- 📚 **Multi-source collection**: Pull bookmarks from X (Twitter) and LinkedIn
+- 📚 **Multi-source collection**: Import bookmarks via browser bookmarklets (X, LinkedIn, etc.)
 - 🔗 **URL fetching**: Add custom URLs and automatically fetch their content
 - ✍️ **Raw text input**: Add text or markdown content directly
 - 🔍 **Deduplication**: Automatic detection and prevention of duplicate entries
@@ -133,15 +133,6 @@ NODE_ENV=development
 # Database
 DATABASE_URL=postgresql://user:password@localhost:5432/cognia_insightarium?schema=public
 
-# X (Twitter) OAuth 2.0 (required for X integration)
-# Get these from: https://developer.x.com/en/portal/dashboard
-# Create a Project and App, then get Client ID and Client Secret
-X_API_KEY=your_client_id_here
-X_API_SECRET=your_client_secret_here
-
-# Optional: Session secret (change in production!)
-SESSION_SECRET=your-random-secret-key-here
-
 # Optional: Frontend URL (defaults to http://localhost:3000)
 FRONTEND_URL=http://localhost:3000
 
@@ -152,8 +143,8 @@ LINKEDIN_ACCESS_TOKEN=
 ```
 
 **Note**: 
-- **X API**: Uses OAuth 2.0 with a "Login with X" button. See [OAUTH_UI_SETUP.md](./OAUTH_UI_SETUP.md) for detailed setup instructions.
 - **LinkedIn API**: Currently a placeholder implementation. LinkedIn credentials are optional and will return empty arrays until implemented.
+- **Bookmarklets**: Use browser bookmarklets to import bookmarks from various sources (see `/save` route).
 
 ### 4. Start Development Servers
 
@@ -211,21 +202,15 @@ cognia-insightarium/
 ### Bookmarks
 
 - `GET /api/bookmarks` - Get all bookmarks (optional `?source=x` query param)
-- `GET /api/bookmarks/x` - Fetch and save X bookmarks (requires OAuth login)
 - `GET /api/bookmarks/linkedin` - Fetch and save LinkedIn saved posts
+- `POST /api/bookmarks/bulk` - Bulk save bookmarks (used by bookmarklets)
+- `POST /api/bookmarks/check-duplicates` - Check for duplicate bookmarks
 - `POST /api/bookmarks/url` - Add a bookmark from a URL
   ```json
   {
     "url": "https://example.com/article"
   }
   ```
-
-### OAuth
-
-- `GET /api/oauth/x/authorize` - Initiate OAuth flow (redirects to X)
-- `GET /api/oauth/x/callback` - OAuth callback (handles X redirect)
-- `GET /api/oauth/x/status` - Check authentication status
-- `POST /api/oauth/x/logout` - Logout and clear session
 
 ### Content
 
@@ -262,13 +247,12 @@ model Bookmark {
 }
 ```
 
-**Note**: The `session` table is automatically created by `connect-pg-simple` to store OAuth sessions. This table is not managed by Prisma but is created automatically when the application starts. Sessions persist across server restarts.
 
 ## Deduplication Logic
 
 The app prevents duplicate entries using a two-step approach:
 
-1. **Primary**: Check for existing bookmark by `source` + `externalId` (for X/LinkedIn items)
+1. **Primary**: Check for existing bookmark by `source` + `externalId` (for items with external IDs like X, LinkedIn)
 2. **Fallback**: Check for existing bookmark by `url` (for URL-based items)
 
 If a duplicate is found, the existing bookmark is returned instead of creating a new one.
@@ -301,39 +285,6 @@ If a duplicate is found, the existing bookmark is returned instead of creating a
 - `npm run format` - Format code with Prettier
 
 ## External API Integrations
-
-### X (Twitter) API
-
-The X integration uses **OAuth 2.0** with a user-friendly "Login with X" button. To set it up:
-
-1. **Create a Developer Account and App**:
-   - Visit the [X Developer Portal](https://developer.x.com/en/portal/dashboard)
-   - Sign up for a developer account (if you don't have one)
-   - Create a new Project and App
-
-2. **Get OAuth 2.0 Credentials**:
-   - In your app settings, navigate to "Keys and tokens"
-   - Copy your **Client ID** (set as `X_API_KEY`)
-   - Copy your **Client Secret** (set as `X_API_SECRET`)
-   - Add callback URL: `http://localhost:3001/api/oauth/x/callback` (or your production backend URL)
-
-3. **Add to `backend/.env`**:
-   ```env
-   X_API_KEY=your_client_id_here
-   X_API_SECRET=your_client_secret_here
-   ```
-
-4. **Usage**:
-   - Click "Login with X" button in the application
-   - Authorize the app on X
-   - Click "Fetch X Bookmarks" to automatically fetch your bookmarks
-   - No manual user ID entry needed - it's detected automatically from OAuth
-
-**Important Notes**:
-- The bookmarks endpoint requires OAuth 2.0 User Context authentication (not Bearer Token)
-- Sessions are stored server-side and expire after 30 days
-- The integration fetches up to 100 bookmarks per request and handles pagination automatically
-- See [OAUTH_UI_SETUP.md](./OAUTH_UI_SETUP.md) for detailed setup instructions
 
 ### LinkedIn API
 
