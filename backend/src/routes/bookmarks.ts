@@ -2,7 +2,7 @@ import express, { Request, Response } from 'express';
 import { fetchXBookmarks } from '../services/xIntegration';
 import { fetchLinkedInSavedPosts } from '../services/linkedInIntegration';
 import { fetchUrlContent } from '../services/urlFetcher';
-import { createBookmarkIfNotExists } from '../utils/deduplication';
+import { createBookmarkIfNotExists, findExistingBookmark } from '../utils/deduplication';
 import { logger } from '../utils/logger';
 import { prisma } from '../db/prismaClient';
 
@@ -219,6 +219,143 @@ router.post('/url', async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Failed to fetch URL content',
+    });
+  }
+});
+
+/**
+ * Helper function to extract external ID and source from an item
+ * Matches the logic used in bulk save endpoint
+ */
+function extractBookmarkData(item: any): { source: string; externalId: string | null; url: string | null } {
+  let externalId: string | null = null;
+  let source = 'url';
+
+  if (item.platform === 'x' && item.url) {
+    source = 'x';
+    const match = item.url.match(/\/status\/(\d+)/) || item.url.match(/x\.com\/\w+\/status\/(\d+)/);
+    if (match) {
+      externalId = match[1];
+    }
+  }
+
+  return {
+    source,
+    externalId,
+    url: item.url || null,
+  };
+}
+
+/**
+ * POST /api/bookmarks/check-duplicates
+ * Check which items in the provided array are duplicates
+ * 
+ * Body: Array of bookmark items with platform, url, text, author, etc.
+ * Returns: Array of indices that are duplicates
+ */
+router.post('/check-duplicates', async (req: Request, res: Response) => {
+  try {
+    const items = req.body;
+
+    if (!Array.isArray(items)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Body must be an array of bookmark items',
+      });
+    }
+
+    logger.info('Checking for duplicates', { count: items.length });
+
+    const duplicateIndices: number[] = [];
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const { source, externalId, url } = extractBookmarkData(item);
+
+      // Check if this bookmark already exists
+      const existing = await findExistingBookmark({
+        source,
+        externalId,
+        url,
+      });
+
+      if (existing) {
+        duplicateIndices.push(i);
+      }
+    }
+
+    return res.json({
+      success: true,
+      duplicateIndices,
+      count: duplicateIndices.length,
+    });
+  } catch (error) {
+    logger.error('Error checking for duplicates', error);
+    return res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to check for duplicates',
+    });
+  }
+});
+
+/**
+ * POST /api/bookmarks/bulk
+ * Bulk save multiple bookmarks
+ * 
+ * Body: Array of bookmark items with platform, url, text, author, etc.
+ */
+router.post('/bulk', async (req: Request, res: Response) => {
+  try {
+    const items = req.body;
+
+    if (!Array.isArray(items)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Body must be an array of bookmark items',
+      });
+    }
+
+    logger.info('Bulk saving bookmarks', { count: items.length });
+
+    const savedBookmarks = [];
+    const errors: Array<{ item: unknown; error: string }> = [];
+
+    for (const item of items) {
+      try {
+        // Extract external ID and source from item
+        const { source, externalId, url } = extractBookmarkData(item);
+
+        // Create bookmark
+        const bookmark = await createBookmarkIfNotExists({
+          source,
+          externalId,
+          url,
+          title: item.text?.substring(0, 200) || item.author || null,
+          content: item.text || null,
+        });
+
+        savedBookmarks.push(bookmark);
+      } catch (error) {
+        logger.error('Error saving bookmark item', { item, error });
+        errors.push({
+          item,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
+    }
+
+    return res.json({
+      success: true,
+      saved: savedBookmarks.length,
+      failed: errors.length,
+      bookmarks: savedBookmarks,
+      errors: errors.length > 0 ? errors : undefined,
+    });
+  } catch (error) {
+    logger.error('Error in POST /api/bookmarks/bulk', error);
+    return res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to save bookmarks',
     });
   }
 });

@@ -88,5 +88,27 @@ export const bookmarkApi = {
     }
     return response.data.bookmark;
   },
+
+  // Bulk save bookmarks
+  bulkSave: async (items: Array<{ platform: string; url?: string; text?: string; author?: string; timestamp?: string }>): Promise<{ saved: number; failed: number; bookmarks: Bookmark[] }> => {
+    const response = await api.post<{ success: boolean; saved: number; failed: number; bookmarks: Bookmark[]; errors?: Array<{ item: unknown; error: string }> }>('/bookmarks/bulk', items);
+    if (!response.data.success) {
+      throw new Error('Failed to save bookmarks');
+    }
+    return {
+      saved: response.data.saved,
+      failed: response.data.failed,
+      bookmarks: response.data.bookmarks,
+    };
+  },
+
+  // Check for duplicates
+  checkDuplicates: async (items: Array<{ platform: string; url?: string; text?: string; author?: string; timestamp?: string }>): Promise<number[]> => {
+    const response = await api.post<{ success: boolean; duplicateIndices: number[]; count: number }>('/bookmarks/check-duplicates', items);
+    if (!response.data.success) {
+      throw new Error('Failed to check for duplicates');
+    }
+    return response.data.duplicateIndices;
+  },
 };
 

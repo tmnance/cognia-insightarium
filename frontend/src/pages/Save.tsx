@@ -1,0 +1,303 @@
+import { useEffect, useState, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { bookmarkApi } from '../services/api';
+
+interface SaveItem {
+  platform: string;
+  url: string;
+  author?: string;
+  text?: string;
+  timestamp?: string;
+}
+
+interface PostMessageData {
+  t: string;
+  p?: string;
+}
+
+export default function Save() {
+  const navigate = useNavigate();
+  const [items, setItems] = useState<SaveItem[]>([]);
+  const [duplicateIndices, setDuplicateIndices] = useState<Set<number>>(new Set());
+  const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [isReady, setIsReady] = useState(false);
+  const messageHandlerRef = useRef<((event: MessageEvent) => void) | null>(null);
+
+  const checkForDuplicates = async (itemsToCheck: SaveItem[]) => {
+    if (itemsToCheck.length === 0) return;
+
+    try {
+      setIsCheckingDuplicates(true);
+      const duplicateIndices = await bookmarkApi.checkDuplicates(itemsToCheck);
+      setDuplicateIndices(new Set(duplicateIndices));
+      
+      if (duplicateIndices.length > 0) {
+        console.log(`Found ${duplicateIndices.length} duplicate(s)`, duplicateIndices);
+      }
+    } catch (err) {
+      console.error('Error checking for duplicates:', err);
+      // Don't show error to user, just log it - duplicate checking is not critical
+    } finally {
+      setIsCheckingDuplicates(false);
+    }
+  };
+
+  useEffect(() => {
+    // Set up postMessage listener
+    const handleMessage = (event: MessageEvent<PostMessageData>) => {
+      // Validate message structure
+      if (!event.data || typeof event.data !== 'object') {
+        return;
+      }
+
+      const data = event.data as PostMessageData;
+      console.log('Received message:', data);
+
+      // Only process messages with the expected type
+      if (data.t !== 'XBM') {
+        return;
+      }
+
+      try {
+        // Parse the payload
+        if (!data.p) {
+          setError('Received XBM message but no payload found');
+          return;
+        }
+
+        const parsed = JSON.parse(data.p);
+        
+        // Ensure it's an array
+        const itemsArray = Array.isArray(parsed) ? parsed : [parsed];
+        
+        // Validate items have required fields
+        const validItems = itemsArray.filter((item: any) => item && (item.url || item.text));
+        
+        if (validItems.length === 0) {
+          setError('No valid items found. Items must have at least a "url" or "text" field.');
+          return;
+        }
+        
+        setItems(validItems);
+        setError(null);
+        setDuplicateIndices(new Set()); // Reset duplicate indices
+        
+        console.log('Received X bookmarks:', validItems);
+        
+        // Check for duplicates after receiving items
+        checkForDuplicates(validItems);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to parse data';
+        setError(`Error parsing save data: ${errorMessage}. Make sure the payload contains valid JSON.`);
+        console.error('Error parsing save data:', err);
+        console.error('Message data:', event.data);
+      }
+    };
+
+    // Store handler reference for cleanup
+    messageHandlerRef.current = handleMessage;
+
+    // Add event listener
+    window.addEventListener('message', handleMessage);
+    setIsReady(true);
+
+    // Cleanup
+    return () => {
+      if (messageHandlerRef.current) {
+        window.removeEventListener('message', messageHandlerRef.current);
+      }
+    };
+  }, []);
+
+  const handleSaveAll = async () => {
+    // Only save non-duplicate items
+    const newItems = items.filter((_, index) => !duplicateIndices.has(index));
+    
+    if (newItems.length === 0) return;
+
+    setIsSaving(true);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const result = await bookmarkApi.bulkSave(newItems);
+
+      if (result.saved > 0) {
+        setSuccessMessage(
+          `Successfully saved ${result.saved} bookmark${result.saved > 1 ? 's' : ''}${result.failed > 0 ? ` (${result.failed} failed)` : ''}`
+        );
+
+        // Redirect to dashboard after a short delay
+        setTimeout(() => {
+          navigate('/');
+        }, 2000);
+      } else {
+        setError(`Failed to save all items. ${result.failed} item(s) failed.`);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save bookmarks');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <div className="container mx-auto px-4 py-8 max-w-6xl">
+        <header className="mb-8">
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">Save Bookmarks</h1>
+          <p className="text-gray-600">
+            {isReady ? 'Ready to receive bookmarks via postMessage' : 'Initializing...'}
+          </p>
+        </header>
+
+        {error && (
+          <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg">
+            <strong>Error:</strong> {error}
+          </div>
+        )}
+
+        {successMessage && (
+          <div className="mb-4 p-4 bg-green-100 border border-green-400 text-green-700 rounded-lg">
+            <strong>Success:</strong> {successMessage}
+            <br />
+            <span className="text-sm">Redirecting to dashboard...</span>
+          </div>
+        )}
+
+        <div className="bg-white rounded-lg shadow-md p-6 mb-4">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">
+                Items Received ({items.length})
+              </h2>
+              <div className="flex items-center gap-4 mt-1 text-sm">
+                <span className="text-gray-600">
+                  <span className="font-semibold text-green-600">{items.length - duplicateIndices.size}</span> new
+                </span>
+                {duplicateIndices.size > 0 && (
+                  <span className="text-amber-600">
+                    <span className="font-semibold">{duplicateIndices.size}</span> duplicate{duplicateIndices.size > 1 ? 's' : ''}
+                  </span>
+                )}
+              </div>
+            </div>
+            {items.length > 0 && (() => {
+              const newItemsCount = items.length - duplicateIndices.size;
+              return (
+                <button
+                  onClick={handleSaveAll}
+                  disabled={isSaving || newItemsCount === 0}
+                  className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {isSaving ? 'Saving...' : newItemsCount > 0 ? `Save ${newItemsCount} New Bookmark${newItemsCount > 1 ? 's' : ''}` : 'No New Items'}
+                </button>
+              );
+            })()}
+          </div>
+          
+          {items.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-gray-500 mb-2">
+                {isReady 
+                  ? 'Waiting for bookmarks data via postMessage...' 
+                  : 'Initializing message listener...'}
+              </p>
+              <p className="text-sm text-gray-400 mt-4">
+                Expected message format:
+              </p>
+              <pre className="bg-gray-100 px-4 py-2 rounded text-xs text-left mt-2 overflow-auto">
+{`window.postMessage({
+  t: "XBM",
+  p: JSON.stringify([{
+    platform: "x",
+    url: "https://x.com/...",
+    text: "...",
+    author: "@username",
+    timestamp: "2025-01-01T00:00:00.000Z"
+  }])
+}, "*");`}
+              </pre>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {isCheckingDuplicates && (
+                <div className="text-center py-2 text-sm text-gray-500">
+                  Checking for duplicates...
+                </div>
+              )}
+              {items.map((item, index) => {
+                const isDuplicate = duplicateIndices.has(index);
+                return (
+                  <div
+                    key={index}
+                    className={`border rounded-lg p-4 transition-colors ${
+                      isDuplicate
+                        ? 'border-amber-300 bg-amber-50 hover:bg-amber-100'
+                        : 'border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-semibold rounded">
+                            {item.platform.toUpperCase()}
+                          </span>
+                          {isDuplicate && (
+                            <span className="px-2 py-1 bg-amber-200 text-amber-800 text-xs font-semibold rounded flex items-center gap-1">
+                              <svg
+                                className="w-3 h-3"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                                />
+                              </svg>
+                              Duplicate
+                            </span>
+                          )}
+                        {item.author && (
+                          <span className="text-sm text-gray-600">@{item.author}</span>
+                        )}
+                        {item.timestamp && (
+                          <span className="text-xs text-gray-400">
+                            {new Date(item.timestamp).toLocaleDateString()}
+                          </span>
+                        )}
+                      </div>
+                      
+                      {item.url && (
+                        <a
+                          href={item.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800 text-sm break-all block mb-2"
+                        >
+                          {item.url}
+                        </a>
+                      )}
+                      
+                      {item.text && (
+                        <p className="text-gray-700 text-sm line-clamp-3">{item.text}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
