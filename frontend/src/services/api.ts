@@ -7,6 +7,17 @@ const api = axios.create({
   },
 });
 
+export interface Tag {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  color?: string | null;
+  autoTagged?: boolean;
+  confidence?: number | null;
+  bookmarkCount?: number;
+}
+
 export interface Bookmark {
   id: string;
   source: string;
@@ -16,6 +27,7 @@ export interface Bookmark {
   content?: string | null;
   createdAt: string;
   updatedAt: string;
+  tags?: Tag[];
 }
 
 export interface ApiResponse<T> {
@@ -28,8 +40,10 @@ export interface ApiResponse<T> {
 
 export const bookmarkApi = {
   // Get all bookmarks
-  getAll: async (source?: string): Promise<Bookmark[]> => {
-    const params = source ? { source } : {};
+  getAll: async (source?: string, tags?: string[]): Promise<Bookmark[]> => {
+    const params: Record<string, string> = {};
+    if (source) params.source = source;
+    if (tags && tags.length > 0) params.tags = tags.join(',');
     const response = await api.get<ApiResponse<Bookmark>>('/bookmarks', { params });
     return response.data.bookmarks || [];
   },
@@ -81,6 +95,67 @@ export const bookmarkApi = {
       throw new Error('Failed to check for duplicates');
     }
     return response.data.duplicateIndices;
+  },
+
+  // Tag-related methods
+  tags: {
+    // Get all tags
+    getAll: async (): Promise<Tag[]> => {
+      const response = await api.get<{ success: boolean; count: number; tags: Tag[] }>('/tags');
+      return response.data.tags || [];
+    },
+    // Get tag by slug
+    getBySlug: async (slug: string): Promise<Tag> => {
+      const response = await api.get<{ success: boolean; tag: Tag }>(`/tags/${slug}`);
+      return response.data.tag;
+    },
+  },
+
+  // Bookmark tag management
+  bookmarkTags: {
+    // Get tags for a bookmark
+    getByBookmarkId: async (bookmarkId: string): Promise<Tag[]> => {
+      const response = await api.get<{ success: boolean; count: number; tags: Tag[] }>(`/bookmarks/${bookmarkId}/tags`);
+      return response.data.tags || [];
+    },
+    // Add tag to bookmark
+    add: async (bookmarkId: string, tagId: string): Promise<void> => {
+      await api.post(`/bookmarks/${bookmarkId}/tags`, { tagId });
+    },
+    // Add tag to bookmark by slug
+    addBySlug: async (bookmarkId: string, tagSlug: string): Promise<void> => {
+      await api.post(`/bookmarks/${bookmarkId}/tags`, { tagSlug });
+    },
+    // Remove tag from bookmark
+    remove: async (bookmarkId: string, tagId: string): Promise<void> => {
+      await api.delete(`/bookmarks/${bookmarkId}/tags/${tagId}`);
+    },
+  },
+
+  // LLM-based tagging
+  tagging: {
+    // Generate prompt for LLM tagging
+    generatePrompt: async (limit?: number): Promise<{ prompt: string; bookmarkIds: string[]; bookmarkCount: number; remainingCount: number; totalUntaggedCount: number; totalBookmarkCount: number }> => {
+      const params = limit ? { limit: limit.toString() } : {};
+      const response = await api.get<{ success: boolean; prompt: string; bookmarkIds: string[]; bookmarkCount: number; remainingCount: number; totalUntaggedCount: number; totalBookmarkCount: number }>('/bookmarks/tagging/prompt', { params });
+      return {
+        prompt: response.data.prompt,
+        bookmarkIds: response.data.bookmarkIds,
+        bookmarkCount: response.data.bookmarkCount,
+        remainingCount: response.data.remainingCount,
+        totalUntaggedCount: response.data.totalUntaggedCount,
+        totalBookmarkCount: response.data.totalBookmarkCount,
+      };
+    },
+    // Apply tags from LLM response
+    applyResponse: async (llmResponse: string): Promise<{ processed: number; tagged: number; errors?: Array<{ bookmarkId: string; error: string }> }> => {
+      const response = await api.post<{ success: boolean; processed: number; tagged: number; errors?: Array<{ bookmarkId: string; error: string }> }>('/bookmarks/tagging/apply', { llmResponse });
+      return {
+        processed: response.data.processed,
+        tagged: response.data.tagged,
+        errors: response.data.errors,
+      };
+    },
   },
 };
 

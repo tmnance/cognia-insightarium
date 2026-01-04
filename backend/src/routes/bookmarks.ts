@@ -4,6 +4,13 @@ import { fetchUrlContent } from '../services/urlFetcher';
 import { createBookmarkIfNotExists, findExistingBookmark } from '../utils/deduplication';
 import { logger } from '../utils/logger';
 import { prisma } from '../db/prismaClient';
+import {
+  getBookmarkTags,
+  addTagToBookmark,
+  removeTagFromBookmark,
+  getAllTagsWithCounts,
+  getTagBySlug,
+} from '../services/tagService';
 
 const router = express.Router();
 
@@ -220,31 +227,331 @@ router.post('/bulk', async (req: Request, res: Response) => {
 
 /**
  * GET /api/bookmarks
- * Get all bookmarks
+ * Get all bookmarks with optional filtering by source or tags
  */
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const { source } = req.query;
+    const { source, tags } = req.query;
 
-    const where = source ? { source: source as string } : {};
+    const where: any = {};
+
+    if (source) {
+      where.source = source as string;
+    }
+
+    // Filter by tags if provided (comma-separated list of tag slugs)
+    if (tags) {
+      const tagSlugs = (tags as string).split(',').map(t => t.trim());
+      where.tags = {
+        some: {
+          tag: {
+            slug: {
+              in: tagSlugs,
+            },
+          },
+        },
+      };
+    }
 
     const bookmarks = await prisma.bookmark.findMany({
       where,
+      include: {
+        tags: {
+          include: {
+            tag: true,
+          },
+        },
+      },
       orderBy: {
         createdAt: 'desc',
       },
     });
 
+    // Transform to include tags in a simpler format
+    const bookmarksWithTags = bookmarks.map(bookmark => ({
+      ...bookmark,
+      tags: bookmark.tags.map(bt => ({
+        ...bt.tag,
+        autoTagged: bt.autoTagged,
+        confidence: bt.confidence,
+      })),
+    }));
+
     return res.json({
       success: true,
-      count: bookmarks.length,
-      bookmarks,
+      count: bookmarksWithTags.length,
+      bookmarks: bookmarksWithTags,
     });
   } catch (error) {
     logger.error('Error in GET /api/bookmarks', error);
     return res.status(500).json({
       success: false,
       error: 'Failed to fetch bookmarks',
+    });
+  }
+});
+
+/**
+ * GET /api/bookmarks/:id/tags
+ * Get all tags for a specific bookmark
+ */
+router.get('/:id/tags', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const bookmark = await prisma.bookmark.findUnique({
+      where: { id },
+    });
+
+    if (!bookmark) {
+      return res.status(404).json({
+        success: false,
+        error: 'Bookmark not found',
+      });
+    }
+
+    const tags = await getBookmarkTags(id);
+
+    return res.json({
+      success: true,
+      count: tags.length,
+      tags,
+    });
+  } catch (error) {
+    logger.error('Error in GET /api/bookmarks/:id/tags', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to fetch bookmark tags',
+    });
+  }
+});
+
+/**
+ * POST /api/bookmarks/:id/tags
+ * Add tag(s) to a bookmark
+ */
+router.post('/:id/tags', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { tagId, tagSlug } = req.body;
+
+    if (!tagId && !tagSlug) {
+      return res.status(400).json({
+        success: false,
+        error: 'Either tagId or tagSlug must be provided',
+      });
+    }
+
+    const bookmark = await prisma.bookmark.findUnique({
+      where: { id },
+    });
+
+    if (!bookmark) {
+      return res.status(404).json({
+        success: false,
+        error: 'Bookmark not found',
+      });
+    }
+
+    let finalTagId = tagId;
+    if (tagSlug && !tagId) {
+      const tag = await getTagBySlug(tagSlug);
+      if (!tag) {
+        return res.status(404).json({
+          success: false,
+          error: 'Tag not found',
+        });
+      }
+      finalTagId = tag.id;
+    }
+
+    const bookmarkTag = await addTagToBookmark(id, finalTagId, false, null);
+
+    return res.json({
+      success: true,
+      bookmarkTag,
+    });
+  } catch (error) {
+    logger.error('Error in POST /api/bookmarks/:id/tags', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to add tag to bookmark',
+    });
+  }
+});
+
+/**
+ * DELETE /api/bookmarks/:id/tags/:tagId
+ * Remove a tag from a bookmark
+ */
+router.delete('/:id/tags/:tagId', async (req: Request, res: Response) => {
+  try {
+    const { id, tagId } = req.params;
+
+    const bookmark = await prisma.bookmark.findUnique({
+      where: { id },
+    });
+
+    if (!bookmark) {
+      return res.status(404).json({
+        success: false,
+        error: 'Bookmark not found',
+      });
+    }
+
+    const removed = await removeTagFromBookmark(id, tagId);
+
+    if (!removed) {
+      return res.status(404).json({
+        success: false,
+        error: 'Tag not found on bookmark',
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: 'Tag removed from bookmark',
+    });
+  } catch (error) {
+    logger.error('Error in DELETE /api/bookmarks/:id/tags/:tagId', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to remove tag from bookmark',
+    });
+  }
+});
+
+/**
+ * GET /api/bookmarks/tagging/prompt
+ * Generate a prompt for LLM-based tag categorization
+ */
+router.get('/tagging/prompt', async (req: Request, res: Response) => {
+  try {
+    const limit = parseInt(req.query.limit as string) || 20;
+    const { generateTaggingPrompt } = await import('../services/promptGeneration');
+    
+    const result = await generateTaggingPrompt(limit);
+
+    return res.json({
+      success: true,
+      prompt: result.prompt,
+      bookmarkIds: result.bookmarkIds,
+      bookmarkCount: result.bookmarkCount,
+      remainingCount: result.remainingCount,
+      totalUntaggedCount: result.totalUntaggedCount,
+      totalBookmarkCount: result.totalBookmarkCount,
+    });
+  } catch (error) {
+    logger.error('Error generating tagging prompt', error);
+    return res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to generate tagging prompt',
+    });
+  }
+});
+
+/**
+ * POST /api/bookmarks/tagging/apply
+ * Apply tags from LLM response
+ */
+router.post('/tagging/apply', async (req: Request, res: Response) => {
+  try {
+    const { llmResponse } = req.body;
+
+    if (!llmResponse || typeof llmResponse !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: 'llmResponse is required and must be a string',
+      });
+    }
+
+    const { parseTaggingResponse } = await import('../services/promptGeneration');
+    const { getTagBySlug, addTagToBookmark } = await import('../services/tagService');
+
+    // Parse the LLM response
+    const parsed = parseTaggingResponse(llmResponse);
+
+    const results = {
+      processed: 0,
+      tagged: 0,
+      errors: [] as Array<{ bookmarkId: string; error: string }>,
+    };
+
+    // Apply tags to bookmarks
+    for (const item of parsed) {
+      try {
+        // Verify bookmark exists
+        const bookmark = await prisma.bookmark.findUnique({
+          where: { id: item.bookmarkId },
+        });
+
+        if (!bookmark) {
+          results.errors.push({
+            bookmarkId: item.bookmarkId,
+            error: 'Bookmark not found',
+          });
+          continue;
+        }
+
+        // Apply each tag
+        let tagApplied = false;
+        for (const tagSlug of item.tagSlugs) {
+          try {
+            const tag = await getTagBySlug(tagSlug);
+            if (!tag) {
+              logger.warn('Tag not found', { tagSlug, bookmarkId: item.bookmarkId });
+              continue;
+            }
+
+            await addTagToBookmark(item.bookmarkId, tag.id, false, null);
+            tagApplied = true;
+          } catch (tagError) {
+            logger.error('Error applying tag to bookmark', {
+              error: tagError,
+              bookmarkId: item.bookmarkId,
+              tagSlug,
+            });
+          }
+        }
+
+        // Mark bookmark as reviewed, regardless of whether tags were applied
+        // This prevents re-processing bookmarks that got no tags
+        await prisma.bookmark.update({
+          where: { id: item.bookmarkId },
+          data: {
+            taggingReviewedAt: new Date(),
+          },
+        });
+
+        if (tagApplied) {
+          results.tagged++;
+        }
+        results.processed++;
+      } catch (error) {
+        results.errors.push({
+          bookmarkId: item.bookmarkId,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
+    }
+
+    logger.info('Applied tags from LLM response', {
+      processed: results.processed,
+      tagged: results.tagged,
+      errors: results.errors.length,
+    });
+
+    return res.json({
+      success: true,
+      processed: results.processed,
+      tagged: results.tagged,
+      errors: results.errors.length > 0 ? results.errors : undefined,
+    });
+  } catch (error) {
+    logger.error('Error applying tags from LLM response', error);
+    return res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to apply tags',
     });
   }
 });

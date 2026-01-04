@@ -83,6 +83,7 @@ export async function createBookmarkIfNotExists(data: BookmarkData) {
     });
 
     logger.info('Created new bookmark', { id: bookmark.id, source: data.source });
+
     return bookmark;
   } catch (error) {
     logger.error('Error creating bookmark', error);

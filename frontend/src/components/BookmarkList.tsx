@@ -1,11 +1,12 @@
-import { Bookmark } from '../services/api';
+import { Bookmark, Tag } from '../services/api';
 
 interface BookmarkListProps {
   bookmarks: Bookmark[];
   isLoading?: boolean;
+  onTagClick?: (tag: Tag) => void;
 }
 
-export default function BookmarkList({ bookmarks, isLoading }: BookmarkListProps) {
+export default function BookmarkList({ bookmarks, isLoading, onTagClick }: BookmarkListProps) {
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -29,6 +30,17 @@ export default function BookmarkList({ bookmarks, isLoading }: BookmarkListProps
       default:
         return 'bg-gray-100 text-gray-800';
     }
+  };
+
+  const getTagStyle = (tag: Tag) => {
+    if (tag.color) {
+      return {
+        backgroundColor: `${tag.color}20`,
+        color: tag.color,
+        borderColor: tag.color,
+      };
+    }
+    return {};
   };
 
   if (isLoading) {
@@ -88,6 +100,41 @@ export default function BookmarkList({ bookmarks, isLoading }: BookmarkListProps
               <p className="text-gray-700 text-sm line-clamp-3 whitespace-pre-wrap">
                 {bookmark.content}
               </p>
+            </div>
+          )}
+
+          {bookmark.tags && bookmark.tags.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {bookmark.tags.map((tag) => (
+                <button
+                  key={tag.id}
+                  onClick={() => onTagClick?.(tag)}
+                  className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border transition-colors ${
+                    onTagClick ? 'cursor-pointer hover:opacity-80' : 'cursor-default'
+                  }`}
+                  style={getTagStyle(tag)}
+                  title={tag.description || undefined}
+                >
+                  <span>{tag.name}</span>
+                  {tag.autoTagged && (
+                    <span title="Auto-tagged">
+                      <svg
+                        className="w-3 h-3"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M13 10V3L4 14h7v7l9-11h-7z"
+                        />
+                      </svg>
+                    </span>
+                  )}
+                </button>
+              ))}
             </div>
           )}
         </div>

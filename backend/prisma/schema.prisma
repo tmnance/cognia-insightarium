@@ -16,10 +16,46 @@ model Bookmark {
   content     String?  // fetched HTML or raw text
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  taggingReviewedAt DateTime? // When bookmark was last reviewed for tagging (null = never reviewed)
+
+  tags        BookmarkTag[]
 
   @@unique([source, externalId])
   @@index([url])
   @@index([source])
+  @@index([taggingReviewedAt])
+}
+
+model Tag {
+  id          String   @id @default(cuid())
+  name        String   @unique // "health", "fitness", "coding", etc.
+  slug        String   @unique // URL-friendly version
+  description String?  // Optional description
+  color       String?  // Optional color for UI (hex code)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  bookmarks   BookmarkTag[]
+  
+  @@index([slug])
+  @@index([name])
+}
+
+model BookmarkTag {
+  id         String   @id @default(cuid())
+  bookmarkId String
+  tagId      String
+  autoTagged Boolean  @default(false) // Whether tag was auto-applied
+  confidence Float?   // Confidence score (0-1) for auto-tagged items
+  createdAt  DateTime @default(now())
+  
+  bookmark   Bookmark @relation(fields: [bookmarkId], references: [id], onDelete: Cascade)
+  tag        Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  
+  @@unique([bookmarkId, tagId])
+  @@index([bookmarkId])
+  @@index([tagId])
+  @@index([autoTagged])
 }
 
 

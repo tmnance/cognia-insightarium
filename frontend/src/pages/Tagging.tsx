@@ -1,0 +1,246 @@
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { bookmarkApi } from '../services/api';
+
+export default function Tagging() {
+  const navigate = useNavigate();
+  const [prompt, setPrompt] = useState<string>('');
+  const [bookmarkCount, setBookmarkCount] = useState<number>(0);
+  const [remainingCount, setRemainingCount] = useState<number>(0);
+  const [totalUntaggedCount, setTotalUntaggedCount] = useState<number>(0);
+  const [totalBookmarkCount, setTotalBookmarkCount] = useState<number>(0);
+  const [llmResponse, setLlmResponse] = useState<string>('');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isApplying, setIsApplying] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [limit, setLimit] = useState<number>(20);
+
+  const handleGeneratePrompt = async () => {
+    try {
+      setIsGenerating(true);
+      setError(null);
+      setSuccess(null);
+      setLlmResponse('');
+
+      const result = await bookmarkApi.tagging.generatePrompt(limit);
+      setPrompt(result.prompt);
+      setBookmarkCount(result.bookmarkCount);
+      setRemainingCount(result.remainingCount);
+      setTotalUntaggedCount(result.totalUntaggedCount);
+      setTotalBookmarkCount(result.totalBookmarkCount);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to generate prompt');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleCopyPrompt = async () => {
+    try {
+      await navigator.clipboard.writeText(prompt);
+      setSuccess('Prompt copied to clipboard!');
+      setTimeout(() => setSuccess(null), 2000);
+    } catch (err) {
+      setError('Failed to copy prompt to clipboard');
+    }
+  };
+
+  const handleApplyTags = async () => {
+    if (!llmResponse.trim()) {
+      setError('Please paste the LLM response first');
+      return;
+    }
+
+    try {
+      setIsApplying(true);
+      setError(null);
+      setSuccess(null);
+
+      const result = await bookmarkApi.tagging.applyResponse(llmResponse);
+      
+      let message = `Successfully processed ${result.processed} bookmark(s) and tagged ${result.tagged} bookmark(s).`;
+      if (result.errors && result.errors.length > 0) {
+        message += ` ${result.errors.length} error(s) occurred.`;
+      }
+      
+      setSuccess(message);
+      setLlmResponse('');
+      setPrompt('');
+
+      // Navigate back to dashboard after a delay
+      setTimeout(() => {
+        navigate('/');
+      }, 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to apply tags');
+    } finally {
+      setIsApplying(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <div className="container mx-auto px-4 py-8 max-w-4xl">
+        <header className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className="text-4xl font-bold text-gray-900 mb-2">LLM-Based Tagging</h1>
+              <p className="text-gray-600">
+                Generate a prompt to categorize bookmarks using ChatGPT, Grok, or other LLM tools
+              </p>
+            </div>
+            <button
+              onClick={() => navigate('/')}
+              className="px-4 py-2 text-gray-600 hover:text-gray-900 transition-colors"
+            >
+              ← Back to Dashboard
+            </button>
+          </div>
+        </header>
+
+        {error && (
+          <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg">
+            <strong>Error:</strong> {error}
+          </div>
+        )}
+
+        {success && (
+          <div className="mb-4 p-4 bg-green-100 border border-green-400 text-green-700 rounded-lg">
+            <strong>Success:</strong> {success}
+          </div>
+        )}
+
+        {/* Step 1: Generate Prompt */}
+        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          <h2 className="text-xl font-bold text-gray-900 mb-4">Step 1: Generate Prompt</h2>
+          
+          {(totalBookmarkCount > 0 || totalUntaggedCount > 0) && (
+            <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+              <div className="text-sm text-gray-700 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">Tagging Progress:</span>
+                  <span>
+                    {totalBookmarkCount - totalUntaggedCount} tagged / {totalBookmarkCount} total
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600">Untagged remaining:</span>
+                  <span className="font-semibold text-gray-900">{totalUntaggedCount}</span>
+                </div>
+                {totalBookmarkCount > 0 && (
+                  <div className="mt-2">
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div
+                        className="bg-blue-600 h-2 rounded-full transition-all"
+                        style={{
+                          width: `${((totalBookmarkCount - totalUntaggedCount) / totalBookmarkCount) * 100}%`,
+                        }}
+                      ></div>
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1 text-right">
+                      {Math.round(((totalBookmarkCount - totalUntaggedCount) / totalBookmarkCount) * 100)}% complete
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Number of bookmarks to process (default: 20)
+            </label>
+            <input
+              type="number"
+              min="1"
+              max="50"
+              value={limit}
+              onChange={(e) => setLimit(parseInt(e.target.value) || 20)}
+              className="w-32 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <button
+            onClick={handleGeneratePrompt}
+            disabled={isGenerating}
+            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {isGenerating ? 'Generating...' : 'Generate Prompt'}
+          </button>
+
+          {prompt && (
+            <div className="mt-6">
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  Generated Prompt ({bookmarkCount} bookmark{bookmarkCount !== 1 ? 's' : ''}, {prompt.length.toLocaleString()} characters)
+                </label>
+                <button
+                  onClick={handleCopyPrompt}
+                  className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  📋 Copy Prompt
+                </button>
+              </div>
+              <textarea
+                readOnly
+                value={prompt}
+                className="w-full h-96 p-4 border border-gray-300 rounded-lg font-mono text-sm bg-gray-50 overflow-auto"
+              />
+              <p className="mt-2 text-sm text-gray-600">
+                Copy the prompt above and paste it into ChatGPT, Grok, or another LLM tool.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Step 2: Paste Response */}
+        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          <h2 className="text-xl font-bold text-gray-900 mb-4">Step 2: Paste LLM Response</h2>
+          
+          <p className="text-sm text-gray-600 mb-4">
+            After pasting the prompt into your LLM tool and getting a response, paste the response here:
+          </p>
+
+          <textarea
+            value={llmResponse}
+            onChange={(e) => setLlmResponse(e.target.value)}
+            placeholder="Paste the LLM response here (JSON format)..."
+            className="w-full h-48 p-4 border border-gray-300 rounded-lg font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        {/* Step 3: Apply Tags */}
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h2 className="text-xl font-bold text-gray-900 mb-4">Step 3: Apply Tags</h2>
+          
+          <p className="text-sm text-gray-600 mb-4">
+            Click the button below to parse the LLM response and apply tags to your bookmarks.
+          </p>
+
+          <button
+            onClick={handleApplyTags}
+            disabled={isApplying || !llmResponse.trim() || !prompt}
+            className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {isApplying ? 'Applying Tags...' : 'Apply Tags to Bookmarks'}
+          </button>
+        </div>
+
+        {/* Instructions */}
+        <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-blue-900 mb-3">📋 Instructions</h3>
+          <ol className="list-decimal list-inside space-y-2 text-sm text-blue-800">
+            <li>Click "Generate Prompt" to create a prompt with untagged bookmarks</li>
+            <li>Copy the generated prompt</li>
+            <li>Paste it into ChatGPT, Grok, Claude, or another LLM tool</li>
+            <li>Copy the LLM's JSON response</li>
+            <li>Paste the response into the "Step 2" textarea above</li>
+            <li>Click "Apply Tags to Bookmarks" to save the tags</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  );
+}
+
