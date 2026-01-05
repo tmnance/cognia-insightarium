@@ -47,12 +47,6 @@ export const bookmarkApi = {
     return response.data.bookmarks || [];
   },
 
-  // Fetch LinkedIn saved posts
-  fetchLinkedIn: async (): Promise<Bookmark[]> => {
-    const response = await api.get<ApiResponse<Bookmark>>('/bookmarks/linkedin');
-    return response.data.bookmarks || [];
-  },
-
   // Add URL bookmark
   addUrl: async (url: string): Promise<Bookmark> => {
     const response = await api.post<ApiResponse<Bookmark>>('/bookmarks/url', { url });
