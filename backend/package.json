@@ -12,7 +12,8 @@
     "format": "prettier --write \"**/*.{ts,json,md}\"",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "backup:db": "node scripts/backup-db.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.20.0",
