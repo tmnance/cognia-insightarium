@@ -12,7 +12,6 @@ model Bookmark {
   source      String   // "x", "linkedin", "url", "raw"
   externalId  String?  // ID from X, LinkedIn, etc
   url         String?
-  title       String?
   content     String?  // fetched HTML or raw text
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

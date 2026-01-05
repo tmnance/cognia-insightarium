@@ -10,7 +10,6 @@ import { logger } from '../utils/logger';
 
 export interface BookmarkForPrompt {
   id: string;
-  title: string | null;
   content: string | null;
   url: string | null;
 }
@@ -44,7 +43,6 @@ async function getUntaggedBookmarks(limit: number = 20): Promise<BookmarkForProm
     },
     select: {
       id: true,
-      title: true,
       content: true,
       url: true,
     },

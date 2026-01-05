@@ -238,10 +238,9 @@ function calculateConfidence(
  * Find matching tags based on content analysis
  */
 export function findTagsByKeywords(
-  title: string | null | undefined,
   content: string | null | undefined
 ): TagMatch[] {
-  const combinedText = [title, content].filter(Boolean).join(' ');
+  const combinedText = content || '';
 
   if (!combinedText || combinedText.trim().length === 0) {
     return [];

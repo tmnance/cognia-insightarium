@@ -8,7 +8,6 @@ interface AddBookmarkFormProps {
 export default function AddBookmarkForm({ onBookmarkAdded }: AddBookmarkFormProps) {
   const [url, setUrl] = useState('');
   const [rawText, setRawText] = useState('');
-  const [title, setTitle] = useState('');
   const [activeTab, setActiveTab] = useState<'url' | 'raw'>('url');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,10 +38,9 @@ export default function AddBookmarkForm({ onBookmarkAdded }: AddBookmarkFormProp
     setIsSubmitting(true);
 
     try {
-      await bookmarkApi.addRawText(rawText, title || undefined);
+      await bookmarkApi.addRawText(rawText);
       setSuccess('Text added successfully!');
       setRawText('');
-      setTitle('');
       onBookmarkAdded();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add text');
@@ -130,20 +128,6 @@ export default function AddBookmarkForm({ onBookmarkAdded }: AddBookmarkFormProp
       {/* Raw Text Form */}
       {activeTab === 'raw' && (
         <form onSubmit={handleRawTextSubmit}>
-          <div className="mb-4">
-            <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-2">
-              Title (optional)
-            </label>
-            <input
-              type="text"
-              id="title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Enter a title..."
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-4"
-              disabled={isSubmitting}
-            />
-          </div>
           <div className="mb-4">
             <label htmlFor="content" className="block text-sm font-medium text-gray-700 mb-2">
               Content (Markdown supported)

@@ -4,7 +4,6 @@ import { logger } from '../utils/logger';
 export interface LinkedInSavedPost {
   externalId: string;
   url?: string;
-  title?: string;
   content?: string;
 }
 

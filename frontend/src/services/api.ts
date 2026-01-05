@@ -23,7 +23,6 @@ export interface Bookmark {
   source: string;
   externalId?: string | null;
   url?: string | null;
-  title?: string | null;
   content?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -64,10 +63,9 @@ export const bookmarkApi = {
   },
 
   // Add raw text content
-  addRawText: async (content: string, title?: string): Promise<Bookmark> => {
+  addRawText: async (content: string): Promise<Bookmark> => {
     const response = await api.post<ApiResponse<Bookmark>>('/content/raw', {
       content,
-      title,
     });
     if (!response.data.bookmark) {
       throw new Error(response.data.error || 'Failed to add raw text');

@@ -3,13 +3,12 @@ import { logger } from '../utils/logger';
 
 export interface FetchedUrlContent {
   url: string;
-  title?: string;
   content?: string;
 }
 
 /**
  * Fetch content from a given URL
- * Extracts title and content from the HTML
+ * Extracts content from the HTML
  */
 export async function fetchUrlContent(url: string): Promise<FetchedUrlContent> {
   try {
@@ -25,36 +24,16 @@ export async function fetchUrlContent(url: string): Promise<FetchedUrlContent> {
     });
 
     const html = response.data;
-    const title = extractTitle(html);
     const content = extractContent(html);
 
     return {
       url,
-      title: title || undefined,
       content: content || undefined,
     };
   } catch (error) {
     logger.error('Error fetching URL content', { url, error });
     throw new Error(`Failed to fetch URL: ${url}`);
   }
-}
-
-/**
- * Extract title from HTML
- */
-function extractTitle(html: string): string | null {
-  const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-  if (titleMatch && titleMatch[1]) {
-    return titleMatch[1].trim();
-  }
-
-  // Try Open Graph title
-  const ogTitleMatch = html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i);
-  if (ogTitleMatch && ogTitleMatch[1]) {
-    return ogTitleMatch[1].trim();
-  }
-
-  return null;
 }
 
 /**

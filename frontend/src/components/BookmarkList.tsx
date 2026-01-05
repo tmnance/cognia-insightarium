@@ -80,10 +80,6 @@ export default function BookmarkList({ bookmarks, isLoading, onTagClick }: Bookm
             </div>
           </div>
 
-          {bookmark.title && (
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">{bookmark.title}</h3>
-          )}
-
           {bookmark.url && (
             <a
               href={bookmark.url}

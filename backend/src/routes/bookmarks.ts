@@ -29,7 +29,6 @@ router.get('/linkedin', async (_req: Request, res: Response) => {
         source: 'linkedin',
         externalId: post.externalId,
         url: post.url,
-        title: post.title,
         content: post.content,
       });
       savedPosts.push(saved);
@@ -71,7 +70,6 @@ router.post('/url', async (req: Request, res: Response) => {
       source: 'url',
       externalId: null,
       url: fetchedContent.url,
-      title: fetchedContent.title,
       content: fetchedContent.content,
     });
 
@@ -195,7 +193,6 @@ router.post('/bulk', async (req: Request, res: Response) => {
           source,
           externalId,
           url,
-          title: item.text?.substring(0, 200) || item.author || null,
           content: item.text || null,
         });
 

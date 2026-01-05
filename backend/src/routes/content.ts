@@ -10,7 +10,7 @@ const router = express.Router();
  */
 router.post('/raw', async (req: Request, res: Response) => {
   try {
-    const { content, title } = req.body;
+    const { content } = req.body;
 
     if (!content || typeof content !== 'string') {
       return res.status(400).json({
@@ -19,10 +19,9 @@ router.post('/raw', async (req: Request, res: Response) => {
       });
     }
 
-    logger.info('Adding raw text content via API', { hasTitle: !!title });
+    logger.info('Adding raw text content via API');
     const bookmark = await addRawText({
       content,
-      title: title || undefined,
     });
 
     return res.json({

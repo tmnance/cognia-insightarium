@@ -3,7 +3,6 @@ import { createBookmarkIfNotExists } from '../utils/deduplication';
 
 export interface RawTextInput {
   content: string;
-  title?: string;
 }
 
 /**
@@ -11,13 +10,12 @@ export interface RawTextInput {
  */
 export async function addRawText(input: RawTextInput) {
   try {
-    logger.info('Adding raw text bookmark', { hasTitle: !!input.title });
+    logger.info('Adding raw text bookmark');
 
     const bookmark = await createBookmarkIfNotExists({
       source: 'raw',
       externalId: null, // Raw text doesn't have an external ID
       url: null,
-      title: input.title || undefined,
       content: input.content,
     });
 

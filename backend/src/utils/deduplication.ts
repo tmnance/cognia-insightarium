@@ -5,7 +5,6 @@ export interface BookmarkData {
   source: string;
   externalId?: string | null;
   url?: string | null;
-  title?: string | null;
   content?: string | null;
 }
 
@@ -77,7 +76,6 @@ export async function createBookmarkIfNotExists(data: BookmarkData) {
         source: data.source,
         externalId: data.externalId || null,
         url: data.url || null,
-        title: data.title || null,
         content: data.content || null,
       },
     });

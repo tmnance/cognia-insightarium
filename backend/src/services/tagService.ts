@@ -142,16 +142,15 @@ export async function initializeDefaultTags() {
 }
 
 /**
- * Automatically tag a bookmark based on its title and content
+ * Automatically tag a bookmark based on its content
  */
 export async function autoTagBookmark(
   bookmarkId: string,
-  title: string | null | undefined,
   content: string | null | undefined
 ) {
   try {
     // Find matching tags based on keywords
-    const tagMatches = findTagsByKeywords(title, content);
+    const tagMatches = findTagsByKeywords(content);
 
     if (tagMatches.length === 0) {
       logger.debug('No tags matched for bookmark', { bookmarkId });
