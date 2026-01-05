@@ -8,21 +8,27 @@ generator client {
 }
 
 model Bookmark {
-  id          String   @id @default(cuid())
-  source      String   // "x", "linkedin", "url", "raw"
-  externalId  String?  // ID from X, LinkedIn, etc
-  url         String?
-  content     String?  // fetched HTML or raw text
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String   @id @default(cuid())
+  source          String   // "x", "linkedin", "url", "raw"
+  externalId      String?  // ID from X, LinkedIn, etc
+  url             String?
+  content         String?  // fetched HTML or raw text
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
   taggingReviewedAt DateTime? // When bookmark was last reviewed for tagging (null = never reviewed)
+  sourceCreatedAt DateTime? // When content was posted/created on the originating platform
+  firstIngestedAt DateTime? // First time the system fetched this content
+  lastIngestedAt  DateTime? // Most recent successful ingestion
 
-  tags        BookmarkTag[]
+  tags            BookmarkTag[]
 
   @@unique([source, externalId])
   @@index([url])
   @@index([source])
   @@index([taggingReviewedAt])
+  @@index([sourceCreatedAt])
+  @@index([firstIngestedAt])
+  @@index([lastIngestedAt])
 }
 
 model Tag {

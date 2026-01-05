@@ -26,6 +26,9 @@ export interface Bookmark {
   content?: string | null;
   createdAt: string;
   updatedAt: string;
+  sourceCreatedAt?: string | null;
+  firstIngestedAt?: string | null;
+  lastIngestedAt?: string | null;
   tags?: Tag[];
 }
 
@@ -80,13 +83,16 @@ export const bookmarkApi = {
     };
   },
 
-  // Check for duplicates
-  checkDuplicates: async (items: Array<{ platform: string; url?: string; text?: string; author?: string; timestamp?: string }>): Promise<number[]> => {
-    const response = await api.post<{ success: boolean; duplicateIndices: number[]; count: number }>('/bookmarks/check-duplicates', items);
+  // Check for duplicates and changes
+  checkDuplicates: async (items: Array<{ platform: string; url?: string; text?: string; author?: string; timestamp?: string }>): Promise<{ duplicateIndices: number[]; changedIndices: number[] }> => {
+    const response = await api.post<{ success: boolean; duplicateIndices: number[]; changedIndices: number[]; duplicateCount: number; changedCount: number }>('/bookmarks/check-duplicates', items);
     if (!response.data.success) {
       throw new Error('Failed to check for duplicates');
     }
-    return response.data.duplicateIndices;
+    return {
+      duplicateIndices: response.data.duplicateIndices,
+      changedIndices: response.data.changedIndices,
+    };
   },
 
   // Tag-related methods

@@ -4,6 +4,9 @@ import { Bookmark, Tag, bookmarkApi } from '../services/api';
 import BookmarkList from '../components/BookmarkList';
 import AddBookmarkForm from '../components/AddBookmarkForm';
 
+type SortField = 'sourceCreatedAt' | 'createdAt' | 'lastIngestedAt' | null;
+type SortDirection = 'asc' | 'desc';
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const [allBookmarks, setAllBookmarks] = useState<Bookmark[]>([]);
@@ -14,8 +17,10 @@ export default function Dashboard() {
   const [error, setError] = useState<string | null>(null);
   const [isAddBookmarkModalOpen, setIsAddBookmarkModalOpen] = useState(false);
 
-  // Filtering and pagination state
+  // Filtering, sorting, and pagination state
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortField, setSortField] = useState<SortField>('sourceCreatedAt');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
@@ -37,8 +42,6 @@ export default function Dashboard() {
       setError(null);
       const tagSlugs = selectedTags.length > 0 ? selectedTags : undefined;
       const data = await bookmarkApi.getAll(undefined, tagSlugs);
-      // Sort by newest first
-      data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       setAllBookmarks(data);
       setCurrentPage(1); // Reset to first page when filters change
     } catch (err) {
@@ -56,32 +59,68 @@ export default function Dashboard() {
     loadBookmarks();
   }, [selectedTags]);
 
-  // Filter bookmarks
-  const filteredBookmarks = useMemo(() => {
-    if (!searchQuery.trim()) {
-      return allBookmarks;
+  // Filter and sort bookmarks
+  const filteredAndSortedBookmarks = useMemo(() => {
+    let filtered = [...allBookmarks];
+
+    // Apply text search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter((bookmark) => {
+        const contentMatch = bookmark.content?.toLowerCase().includes(query);
+        const urlMatch = bookmark.url?.toLowerCase().includes(query);
+        const tagMatch = bookmark.tags?.some(
+          (tag) =>
+            tag.name.toLowerCase().includes(query) ||
+            tag.description?.toLowerCase().includes(query)
+        );
+        return contentMatch || urlMatch || tagMatch;
+      });
     }
 
-    const query = searchQuery.toLowerCase();
-    return allBookmarks.filter((bookmark) => {
-      const contentMatch = bookmark.content?.toLowerCase().includes(query);
-      const urlMatch = bookmark.url?.toLowerCase().includes(query);
-      const tagMatch = bookmark.tags?.some(
-        (tag) =>
-          tag.name.toLowerCase().includes(query) ||
-          tag.description?.toLowerCase().includes(query)
-      );
-      return contentMatch || urlMatch || tagMatch;
-    });
-  }, [allBookmarks, searchQuery]);
+    // Apply sorting
+    if (sortField) {
+      filtered.sort((a, b) => {
+        let aValue: number;
+        let bValue: number;
+
+        switch (sortField) {
+          case 'sourceCreatedAt':
+            aValue = a.sourceCreatedAt ? new Date(a.sourceCreatedAt).getTime() : 0;
+            bValue = b.sourceCreatedAt ? new Date(b.sourceCreatedAt).getTime() : 0;
+            break;
+          case 'createdAt':
+            aValue = new Date(a.createdAt).getTime();
+            bValue = new Date(b.createdAt).getTime();
+            break;
+          case 'lastIngestedAt':
+            aValue = a.lastIngestedAt ? new Date(a.lastIngestedAt).getTime() : 0;
+            bValue = b.lastIngestedAt ? new Date(b.lastIngestedAt).getTime() : 0;
+            break;
+          default:
+            return 0;
+        }
+
+        // Handle null/zero values - push to end
+        if (aValue === 0 && bValue === 0) return 0;
+        if (aValue === 0) return 1;
+        if (bValue === 0) return -1;
+
+        const comparison = aValue - bValue;
+        return sortDirection === 'asc' ? comparison : -comparison;
+      });
+    }
+
+    return filtered;
+  }, [allBookmarks, searchQuery, sortField, sortDirection]);
 
   // Pagination
-  const totalPages = Math.ceil(filteredBookmarks.length / itemsPerPage);
+  const totalPages = Math.ceil(filteredAndSortedBookmarks.length / itemsPerPage);
   const paginatedBookmarks = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
-    return filteredBookmarks.slice(startIndex, endIndex);
-  }, [filteredBookmarks, currentPage, itemsPerPage]);
+    return filteredAndSortedBookmarks.slice(startIndex, endIndex);
+  }, [filteredAndSortedBookmarks, currentPage, itemsPerPage]);
 
   const handleTagClick = (tag: Tag) => {
     setSelectedTags((prev) => {
@@ -107,7 +146,50 @@ export default function Dashboard() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      // Toggle direction if same field
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      // New field, default to desc
+      setSortField(field);
+      setSortDirection('desc');
+    }
+    setCurrentPage(1);
+  };
+
   const hasActiveFilters = searchQuery.trim() || selectedTags.length > 0;
+
+  const SortButton = ({ field, label }: { field: SortField; label: string }) => {
+    const isActive = sortField === field;
+    return (
+      <button
+        onClick={() => handleSort(field)}
+        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ${
+          isActive
+            ? 'bg-blue-600 text-white'
+            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+        }`}
+      >
+        <span>{label}</span>
+        {isActive && (
+          <svg
+            className={`w-4 h-4 ${sortDirection === 'desc' ? 'rotate-180' : ''}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M5 15l7-7 7 7"
+            />
+          </svg>
+        )}
+      </button>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -248,14 +330,14 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Bookmarks List Header with Results Count */}
-        <div className="flex items-center justify-between mb-4">
+        {/* Bookmarks List Header with Sort Buttons */}
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
           <div>
             <h2 className="text-2xl font-bold text-gray-900">Bookmarks</h2>
             <p className="text-sm text-gray-600 mt-1">
-              {filteredBookmarks.length === 0
+              {filteredAndSortedBookmarks.length === 0
                 ? 'No bookmarks found'
-                : `Showing ${paginatedBookmarks.length} of ${filteredBookmarks.length} bookmark${filteredBookmarks.length !== 1 ? 's' : ''}`}
+                : `Showing ${paginatedBookmarks.length} of ${filteredAndSortedBookmarks.length} bookmark${filteredAndSortedBookmarks.length !== 1 ? 's' : ''}`}
               {hasActiveFilters && (
                 <button
                   onClick={() => {
@@ -268,6 +350,14 @@ export default function Dashboard() {
                 </button>
               )}
             </p>
+          </div>
+
+          {/* Sort Buttons */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm text-gray-600 font-medium">Sort by:</span>
+            <SortButton field="sourceCreatedAt" label="Posted" />
+            <SortButton field="createdAt" label="Added" />
+            <SortButton field="lastIngestedAt" label="Updated" />
           </div>
         </div>
 

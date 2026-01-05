@@ -19,6 +19,7 @@ export default function Save() {
   const navigate = useNavigate();
   const [items, setItems] = useState<SaveItem[]>([]);
   const [duplicateIndices, setDuplicateIndices] = useState<Set<number>>(new Set());
+  const [changedIndices, setChangedIndices] = useState<Set<number>>(new Set());
   const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -31,11 +32,12 @@ export default function Save() {
 
     try {
       setIsCheckingDuplicates(true);
-      const duplicateIndices = await bookmarkApi.checkDuplicates(itemsToCheck);
-      setDuplicateIndices(new Set(duplicateIndices));
+      const result = await bookmarkApi.checkDuplicates(itemsToCheck);
+      setDuplicateIndices(new Set(result.duplicateIndices));
+      setChangedIndices(new Set(result.changedIndices));
       
-      if (duplicateIndices.length > 0) {
-        console.log(`Found ${duplicateIndices.length} duplicate(s)`, duplicateIndices);
+      if (result.duplicateIndices.length > 0 || result.changedIndices.length > 0) {
+        console.log(`Found ${result.duplicateIndices.length} duplicate(s) and ${result.changedIndices.length} changed item(s)`, result);
       }
     } catch (err) {
       console.error('Error checking for duplicates:', err);
@@ -84,6 +86,7 @@ export default function Save() {
         setItems(validItems);
         setError(null);
         setDuplicateIndices(new Set()); // Reset duplicate indices
+        setChangedIndices(new Set()); // Reset changed indices
         
         console.log('Received X bookmarks:', validItems);
         
@@ -113,21 +116,24 @@ export default function Save() {
   }, []);
 
   const handleSaveAll = async () => {
-    // Only save non-duplicate items
-    const newItems = items.filter((_, index) => !duplicateIndices.has(index));
+    // Save new items and changed items (exclude true duplicates)
+    const itemsToSave = items.filter((_, index) => !duplicateIndices.has(index));
     
-    if (newItems.length === 0) return;
+    if (itemsToSave.length === 0) return;
 
     setIsSaving(true);
     setError(null);
     setSuccessMessage(null);
 
     try {
-      const result = await bookmarkApi.bulkSave(newItems);
+      const result = await bookmarkApi.bulkSave(itemsToSave);
+
+      const newCount = items.length - duplicateIndices.size - changedIndices.size;
+      const updatedCount = changedIndices.size;
 
       if (result.saved > 0) {
         setSuccessMessage(
-          `Successfully saved ${result.saved} bookmark${result.saved > 1 ? 's' : ''}${result.failed > 0 ? ` (${result.failed} failed)` : ''}`
+          `Successfully saved ${newCount} new bookmark${newCount > 1 ? 's' : ''}${updatedCount > 0 ? ` and updated ${updatedCount} existing bookmark${updatedCount > 1 ? 's' : ''}` : ''}${result.failed > 0 ? ` (${result.failed} failed)` : ''}`
         );
 
         // Redirect to dashboard after a short delay
@@ -143,6 +149,11 @@ export default function Save() {
       setIsSaving(false);
     }
   };
+
+  const newItemsCount = items.length - duplicateIndices.size - changedIndices.size;
+  const changedItemsCount = changedIndices.size;
+  const duplicateItemsCount = duplicateIndices.size;
+  const itemsToSaveCount = newItemsCount + changedItemsCount;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -175,28 +186,36 @@ export default function Save() {
                 Items Received ({items.length})
               </h2>
               <div className="flex items-center gap-4 mt-1 text-sm">
-                <span className="text-gray-600">
-                  <span className="font-semibold text-green-600">{items.length - duplicateIndices.size}</span> new
-                </span>
-                {duplicateIndices.size > 0 && (
+                {newItemsCount > 0 && (
+                  <span className="text-gray-600">
+                    <span className="font-semibold text-green-600">{newItemsCount}</span> new
+                  </span>
+                )}
+                {changedItemsCount > 0 && (
+                  <span className="text-blue-600">
+                    <span className="font-semibold">{changedItemsCount}</span> to update
+                  </span>
+                )}
+                {duplicateItemsCount > 0 && (
                   <span className="text-amber-600">
-                    <span className="font-semibold">{duplicateIndices.size}</span> duplicate{duplicateIndices.size > 1 ? 's' : ''}
+                    <span className="font-semibold">{duplicateItemsCount}</span> duplicate{duplicateItemsCount > 1 ? 's' : ''}
                   </span>
                 )}
               </div>
             </div>
-            {items.length > 0 && (() => {
-              const newItemsCount = items.length - duplicateIndices.size;
-              return (
-                <button
-                  onClick={handleSaveAll}
-                  disabled={isSaving || newItemsCount === 0}
-                  className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {isSaving ? 'Saving...' : newItemsCount > 0 ? `Save ${newItemsCount} New Bookmark${newItemsCount > 1 ? 's' : ''}` : 'No New Items'}
-                </button>
-              );
-            })()}
+            {items.length > 0 && (
+              <button
+                onClick={handleSaveAll}
+                disabled={isSaving || itemsToSaveCount === 0}
+                className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {isSaving
+                  ? 'Saving...'
+                  : itemsToSaveCount > 0
+                  ? `Save ${newItemsCount > 0 ? `${newItemsCount} New${changedItemsCount > 0 ? ' + ' : ''}` : ''}${changedItemsCount > 0 ? `${changedItemsCount} Updated` : ''}`
+                  : 'No Items to Save'}
+              </button>
+            )}
           </div>
           
           {items.length === 0 ? (
@@ -226,23 +245,26 @@ export default function Save() {
             <div className="space-y-4">
               {isCheckingDuplicates && (
                 <div className="text-center py-2 text-sm text-gray-500">
-                  Checking for duplicates...
+                  Checking for duplicates and changes...
                 </div>
               )}
               {items.map((item, index) => {
                 const isDuplicate = duplicateIndices.has(index);
+                const isChanged = changedIndices.has(index);
                 return (
                   <div
                     key={index}
                     className={`border rounded-lg p-4 transition-colors ${
                       isDuplicate
                         ? 'border-amber-300 bg-amber-50 hover:bg-amber-100'
+                        : isChanged
+                        ? 'border-blue-300 bg-blue-50 hover:bg-blue-100'
                         : 'border-gray-200 hover:bg-gray-50'
                     }`}
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
+                        <div className="flex items-center gap-2 mb-2 flex-wrap">
                           <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-semibold rounded">
                             {item.platform.toUpperCase()}
                           </span>
@@ -264,33 +286,51 @@ export default function Save() {
                               Duplicate
                             </span>
                           )}
-                        {item.author && (
-                          <span className="text-sm text-gray-600">@{item.author}</span>
+                          {isChanged && (
+                            <span className="px-2 py-1 bg-blue-200 text-blue-800 text-xs font-semibold rounded flex items-center gap-1">
+                              <svg
+                                className="w-3 h-3"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                                />
+                              </svg>
+                              Updated
+                            </span>
+                          )}
+                          {item.author && (
+                            <span className="text-sm text-gray-600">@{item.author}</span>
+                          )}
+                          {item.timestamp && (
+                            <span className="text-xs text-gray-400">
+                              {new Date(item.timestamp).toLocaleDateString()}
+                            </span>
+                          )}
+                        </div>
+                        
+                        {item.url && (
+                          <a
+                            href={item.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-800 text-sm break-all block mb-2"
+                          >
+                            {item.url}
+                          </a>
                         )}
-                        {item.timestamp && (
-                          <span className="text-xs text-gray-400">
-                            {new Date(item.timestamp).toLocaleDateString()}
-                          </span>
+                        
+                        {item.text && (
+                          <p className="text-gray-700 text-sm line-clamp-3">{item.text}</p>
                         )}
                       </div>
-                      
-                      {item.url && (
-                        <a
-                          href={item.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:text-blue-800 text-sm break-all block mb-2"
-                        >
-                          {item.url}
-                        </a>
-                      )}
-                      
-                      {item.text && (
-                        <p className="text-gray-700 text-sm line-clamp-3">{item.text}</p>
-                      )}
                     </div>
                   </div>
-                </div>
                 );
               })}
             </div>
@@ -300,4 +340,3 @@ export default function Save() {
     </div>
   );
 }
-

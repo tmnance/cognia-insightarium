@@ -8,7 +8,24 @@ interface BookmarkListProps {
 
 export default function BookmarkList({ bookmarks, isLoading, onTagClick }: BookmarkListProps) {
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) {
+      return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    } else if (diffDays < 7) {
+      return `${diffDays}d ago`;
+    } else if (diffDays < 365) {
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    } else {
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+  };
+
+  const getFullDate = (dateString: string) => {
+    return new Date(dateString).toLocaleString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -62,81 +79,97 @@ export default function BookmarkList({ bookmarks, isLoading, onTagClick }: Bookm
 
   return (
     <div className="space-y-4">
-      {bookmarks.map((bookmark) => (
-        <div
-          key={bookmark.id}
-          className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
-        >
-          <div className="flex items-start justify-between mb-3">
-            <div className="flex items-center gap-3">
-              <span
-                className={`px-3 py-1 rounded-full text-xs font-semibold ${getSourceBadgeColor(
-                  bookmark.source
-                )}`}
-              >
-                {bookmark.source.toUpperCase()}
-              </span>
-              <span className="text-sm text-gray-500">{formatDate(bookmark.createdAt)}</span>
-            </div>
-          </div>
+      {bookmarks.map((bookmark) => {
+        // Determine which date to show (prefer sourceCreatedAt, fallback to createdAt)
+        const displayDate = bookmark.sourceCreatedAt || bookmark.createdAt;
+        const displayDateLabel = bookmark.sourceCreatedAt ? 'Posted' : 'Added';
 
-          {bookmark.url && (
-            <a
-              href={bookmark.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-600 hover:text-blue-800 text-sm break-all mb-2 block"
-            >
-              {bookmark.url}
-            </a>
-          )}
-
-          {bookmark.content && (
-            <div className="mt-3">
-              <p className="text-gray-700 text-sm line-clamp-3 whitespace-pre-wrap">
-                {bookmark.content}
-              </p>
-            </div>
-          )}
-
-          {bookmark.tags && bookmark.tags.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {bookmark.tags.map((tag) => (
-                <button
-                  key={tag.id}
-                  onClick={() => onTagClick?.(tag)}
-                  className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border transition-colors ${
-                    onTagClick ? 'cursor-pointer hover:opacity-80' : 'cursor-default'
-                  }`}
-                  style={getTagStyle(tag)}
-                  title={tag.description || undefined}
+        return (
+          <div
+            key={bookmark.id}
+            className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
+          >
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex items-center gap-3 flex-wrap">
+                <span
+                  className={`px-3 py-1 rounded-full text-xs font-semibold ${getSourceBadgeColor(
+                    bookmark.source
+                  )}`}
                 >
-                  <span>{tag.name}</span>
-                  {tag.autoTagged && (
-                    <span title="Auto-tagged">
-                      <svg
-                        className="w-3 h-3"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M13 10V3L4 14h7v7l9-11h-7z"
-                        />
-                      </svg>
-                    </span>
-                  )}
-                </button>
-              ))}
+                  {bookmark.source.toUpperCase()}
+                </span>
+                <span className="text-xs text-gray-600 font-medium" title={getFullDate(displayDate)}>
+                  {displayDateLabel}: {formatDate(displayDate)}
+                </span>
+                {bookmark.sourceCreatedAt && bookmark.createdAt && (
+                  <span className="text-xs text-gray-400" title={getFullDate(bookmark.createdAt)}>
+                    Added {formatDate(bookmark.createdAt)}
+                  </span>
+                )}
+                {bookmark.lastIngestedAt && bookmark.lastIngestedAt !== bookmark.createdAt && (
+                  <span className="text-xs text-gray-400" title={getFullDate(bookmark.lastIngestedAt)}>
+                    Updated {formatDate(bookmark.lastIngestedAt)}
+                  </span>
+                )}
+              </div>
             </div>
-          )}
-        </div>
-      ))}
+
+            {bookmark.url && (
+              <a
+                href={bookmark.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:text-blue-800 text-sm break-all mb-2 block"
+              >
+                {bookmark.url}
+              </a>
+            )}
+
+            {bookmark.content && (
+              <div className="mt-3">
+                <p className="text-gray-700 text-sm line-clamp-3 whitespace-pre-wrap">
+                  {bookmark.content}
+                </p>
+              </div>
+            )}
+
+            {bookmark.tags && bookmark.tags.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {bookmark.tags.map((tag) => (
+                  <button
+                    key={tag.id}
+                    onClick={() => onTagClick?.(tag)}
+                    className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border transition-colors ${
+                      onTagClick ? 'cursor-pointer hover:opacity-80' : 'cursor-default'
+                    }`}
+                    style={getTagStyle(tag)}
+                    title={tag.description || undefined}
+                  >
+                    <span>{tag.name}</span>
+                    {tag.autoTagged && (
+                      <span title="Auto-tagged">
+                        <svg
+                          className="w-3 h-3"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M13 10V3L4 14h7v7l9-11h-7z"
+                          />
+                        </svg>
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
-
-

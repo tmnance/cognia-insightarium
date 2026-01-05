@@ -1,7 +1,7 @@
 import express, { Request, Response } from 'express';
 import { fetchLinkedInSavedPosts } from '../services/linkedInIntegration';
 import { fetchUrlContent } from '../services/urlFetcher';
-import { createBookmarkIfNotExists, findExistingBookmark } from '../utils/deduplication';
+import { createBookmarkIfNotExists, findExistingBookmark, updateBookmark } from '../utils/deduplication';
 import { logger } from '../utils/logger';
 import { prisma } from '../db/prismaClient';
 import {
@@ -111,10 +111,10 @@ function extractBookmarkData(item: any): { source: string; externalId: string | 
 
 /**
  * POST /api/bookmarks/check-duplicates
- * Check which items in the provided array are duplicates
+ * Check which items in the provided array are duplicates or have changed
  * 
- * Body: Array of bookmark items with platform, url, text, author, etc.
- * Returns: Array of indices that are duplicates
+ * Body: Array of bookmark items with platform, url, text, author, timestamp, etc.
+ * Returns: Object with duplicateIndices and changedIndices arrays
  */
 router.post('/check-duplicates', async (req: Request, res: Response) => {
   try {
@@ -127,9 +127,10 @@ router.post('/check-duplicates', async (req: Request, res: Response) => {
       });
     }
 
-    logger.info('Checking for duplicates', { count: items.length });
+    logger.info('Checking for duplicates and changes', { count: items.length });
 
     const duplicateIndices: number[] = [];
+    const changedIndices: number[] = [];
 
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
@@ -143,17 +144,31 @@ router.post('/check-duplicates', async (req: Request, res: Response) => {
       });
 
       if (existing) {
-        duplicateIndices.push(i);
+        // Check if anything has changed
+        const newContent = item.text || null;
+        const newSourceCreatedAt = item.timestamp ? new Date(item.timestamp) : null;
+        
+        const contentChanged = newContent !== null && existing.content !== newContent;
+        const sourceCreatedAtChanged = newSourceCreatedAt !== null && 
+          (!existing.sourceCreatedAt || existing.sourceCreatedAt.getTime() !== newSourceCreatedAt.getTime());
+        
+        if (contentChanged || sourceCreatedAtChanged) {
+          changedIndices.push(i);
+        } else {
+          duplicateIndices.push(i);
+        }
       }
     }
 
     return res.json({
       success: true,
       duplicateIndices,
-      count: duplicateIndices.length,
+      changedIndices,
+      duplicateCount: duplicateIndices.length,
+      changedCount: changedIndices.length,
     });
   } catch (error) {
-    logger.error('Error checking for duplicates', error);
+    logger.error('Error checking for duplicates and changes', error);
     return res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Failed to check for duplicates',
@@ -188,13 +203,33 @@ router.post('/bulk', async (req: Request, res: Response) => {
         // Extract external ID and source from item
         const { source, externalId, url } = extractBookmarkData(item);
 
-        // Create bookmark
-        const bookmark = await createBookmarkIfNotExists({
+        // Parse sourceCreatedAt from timestamp if provided
+        const sourceCreatedAt = item.timestamp ? new Date(item.timestamp) : null;
+
+        // Check if bookmark exists
+        const existing = await findExistingBookmark({
           source,
           externalId,
           url,
-          content: item.text || null,
         });
+
+        let bookmark;
+        if (existing) {
+          // Update existing bookmark
+          bookmark = await updateBookmark(existing.id, {
+            content: item.text || null,
+            sourceCreatedAt: sourceCreatedAt || undefined,
+          });
+        } else {
+          // Create new bookmark
+          bookmark = await createBookmarkIfNotExists({
+            source,
+            externalId,
+            url,
+            content: item.text || null,
+            sourceCreatedAt,
+          });
+        }
 
         savedBookmarks.push(bookmark);
       } catch (error) {

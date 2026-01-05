@@ -6,6 +6,7 @@ export interface BookmarkData {
   externalId?: string | null;
   url?: string | null;
   content?: string | null;
+  sourceCreatedAt?: Date | string | null; // When content was posted on originating platform
 }
 
 /**
@@ -56,18 +57,70 @@ export async function findExistingBookmark(data: BookmarkData) {
 }
 
 /**
+ * Update an existing bookmark with new data
+ */
+export async function updateBookmark(bookmarkId: string, data: Partial<BookmarkData>) {
+  const now = new Date();
+  const sourceCreatedAt = data.sourceCreatedAt
+    ? typeof data.sourceCreatedAt === 'string'
+      ? new Date(data.sourceCreatedAt)
+      : data.sourceCreatedAt
+    : undefined;
+
+  const updateData: any = {
+    lastIngestedAt: now,
+  };
+
+  if (data.content !== undefined) {
+    updateData.content = data.content;
+  }
+  if (sourceCreatedAt !== undefined) {
+    updateData.sourceCreatedAt = sourceCreatedAt;
+  }
+
+  const updated = await prisma.bookmark.update({
+    where: { id: bookmarkId },
+    data: updateData,
+  });
+
+  logger.info('Updated bookmark', { id: bookmarkId });
+  return updated;
+}
+
+/**
  * Create a bookmark only if it doesn't already exist
  * Returns the created or existing bookmark
+ * Updates lastIngestedAt if bookmark exists
  */
 export async function createBookmarkIfNotExists(data: BookmarkData) {
   const existing = await findExistingBookmark(data);
+  const now = new Date();
+  const sourceCreatedAt = data.sourceCreatedAt
+    ? typeof data.sourceCreatedAt === 'string'
+      ? new Date(data.sourceCreatedAt)
+      : data.sourceCreatedAt
+    : null;
 
   if (existing) {
-    logger.info('Bookmark already exists, skipping creation', {
+    // Update lastIngestedAt for existing bookmark
+    // Also update sourceCreatedAt if it's not set and we have a value
+    const updateData: any = {
+      lastIngestedAt: now,
+    };
+    if (!existing.sourceCreatedAt && sourceCreatedAt) {
+      updateData.sourceCreatedAt = sourceCreatedAt;
+    }
+
+    const updated = await prisma.bookmark.update({
+      where: { id: existing.id },
+      data: updateData,
+    });
+
+    logger.info('Bookmark already exists, updated lastIngestedAt', {
       id: existing.id,
       source: data.source,
     });
-    return existing;
+    return updated;
   }
 
   try {
@@ -77,6 +130,9 @@ export async function createBookmarkIfNotExists(data: BookmarkData) {
         externalId: data.externalId || null,
         url: data.url || null,
         content: data.content || null,
+        sourceCreatedAt,
+        firstIngestedAt: now,
+        lastIngestedAt: now,
       },
     });
 
