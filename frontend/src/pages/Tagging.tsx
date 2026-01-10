@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { bookmarkApi } from '../services/api';
 
@@ -12,9 +12,29 @@ export default function Tagging() {
   const [llmResponse, setLlmResponse] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
+  const [isLoadingStats, setIsLoadingStats] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [limit, setLimit] = useState<number>(20);
+
+  // Load stats on component mount
+  useEffect(() => {
+    const loadStats = async () => {
+      try {
+        setIsLoadingStats(true);
+        const stats = await bookmarkApi.tagging.getStats();
+        setTotalUntaggedCount(stats.totalUntaggedCount);
+        setTotalBookmarkCount(stats.totalBookmarkCount);
+      } catch (err) {
+        console.error('Failed to load tagging stats:', err);
+        // Don't show error to user for stats loading failure
+      } finally {
+        setIsLoadingStats(false);
+      }
+    };
+
+    loadStats();
+  }, []);
 
   const handleGeneratePrompt = async () => {
     try {
@@ -24,11 +44,23 @@ export default function Tagging() {
       setLlmResponse('');
 
       const result = await bookmarkApi.tagging.generatePrompt(limit);
+      
+      // Update stats from result
+      setTotalUntaggedCount(result.totalUntaggedCount);
+      setTotalBookmarkCount(result.totalBookmarkCount);
+      
+      // Check if there are bookmarks to tag
+      if (result.bookmarkCount === 0) {
+        setError('No untagged bookmarks found to process. All bookmarks have been reviewed.');
+        setPrompt('');
+        setBookmarkCount(0);
+        setRemainingCount(result.remainingCount);
+        return;
+      }
+
       setPrompt(result.prompt);
       setBookmarkCount(result.bookmarkCount);
       setRemainingCount(result.remainingCount);
-      setTotalUntaggedCount(result.totalUntaggedCount);
-      setTotalBookmarkCount(result.totalBookmarkCount);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate prompt');
     } finally {
@@ -67,6 +99,15 @@ export default function Tagging() {
       setSuccess(message);
       setLlmResponse('');
       setPrompt('');
+
+      // Refresh stats after applying tags
+      try {
+        const stats = await bookmarkApi.tagging.getStats();
+        setTotalUntaggedCount(stats.totalUntaggedCount);
+        setTotalBookmarkCount(stats.totalBookmarkCount);
+      } catch (err) {
+        console.error('Failed to refresh stats:', err);
+      }
 
       // Navigate back to dashboard after a delay
       setTimeout(() => {
@@ -115,7 +156,11 @@ export default function Tagging() {
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <h2 className="text-xl font-bold text-gray-900 mb-4">Step 1: Generate Prompt</h2>
           
-          {(totalBookmarkCount > 0 || totalUntaggedCount > 0) && (
+          {isLoadingStats ? (
+            <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+              <div className="text-sm text-gray-600">Loading tagging statistics...</div>
+            </div>
+          ) : totalBookmarkCount > 0 ? (
             <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
               <div className="text-sm text-gray-700 space-y-1">
                 <div className="flex items-center justify-between">
@@ -145,7 +190,7 @@ export default function Tagging() {
                 )}
               </div>
             </div>
-          )}
+          ) : null}
 
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-2">

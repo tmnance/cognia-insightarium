@@ -132,6 +132,14 @@ export const bookmarkApi = {
 
   // LLM-based tagging
   tagging: {
+    // Get tagging statistics
+    getStats: async (): Promise<{ totalUntaggedCount: number; totalBookmarkCount: number }> => {
+      const response = await api.get<{ success: boolean; totalUntaggedCount: number; totalBookmarkCount: number }>('/bookmarks/llm-tagging/stats');
+      return {
+        totalUntaggedCount: response.data.totalUntaggedCount,
+        totalBookmarkCount: response.data.totalBookmarkCount,
+      };
+    },
     // Generate prompt for LLM tagging
     generatePrompt: async (limit?: number): Promise<{ prompt: string; bookmarkIds: string[]; bookmarkCount: number; remainingCount: number; totalUntaggedCount: number; totalBookmarkCount: number }> => {
       const params = limit ? { limit: limit.toString() } : {};

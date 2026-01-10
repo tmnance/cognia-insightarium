@@ -54,7 +54,7 @@ async function getUntaggedBookmarks(limit: number = 20): Promise<BookmarkForProm
 /**
  * Get total count of untagged bookmarks that haven't been reviewed yet
  */
-async function getUntaggedBookmarkCount(): Promise<number> {
+export async function getUntaggedBookmarkCount(): Promise<number> {
   return await prisma.bookmark.count({
     where: {
       tags: {
@@ -69,7 +69,7 @@ async function getUntaggedBookmarkCount(): Promise<number> {
 /**
  * Get total count of all bookmarks
  */
-async function getTotalBookmarkCount(): Promise<number> {
+export async function getTotalBookmarkCount(): Promise<number> {
   return await prisma.bookmark.count();
 }
 

@@ -453,6 +453,31 @@ router.delete('/:id/tags/:tagId', async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/bookmarks/llm-tagging/stats
+ * Get statistics about tagging progress (without generating a prompt)
+ */
+router.get('/llm-tagging/stats', async (_req: Request, res: Response) => {
+  try {
+    const { getUntaggedBookmarkCount, getTotalBookmarkCount } = await import('../services/promptGeneration');
+    
+    const totalUntagged = await getUntaggedBookmarkCount();
+    const totalBookmarks = await getTotalBookmarkCount();
+
+    return res.json({
+      success: true,
+      totalUntaggedCount: totalUntagged,
+      totalBookmarkCount: totalBookmarks,
+    });
+  } catch (error) {
+    logger.error('Error getting tagging stats', error);
+    return res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to get tagging stats',
+    });
+  }
+});
+
+/**
  * GET /api/bookmarks/llm-tagging/prompt
  * Generate a prompt for LLM-based tag categorization
  */
@@ -473,6 +498,24 @@ router.get('/llm-tagging/prompt', async (req: Request, res: Response) => {
       totalBookmarkCount: result.totalBookmarkCount,
     });
   } catch (error) {
+    // Handle the case where there are no untagged bookmarks
+    if (error instanceof Error && error.message === 'No untagged bookmarks found') {
+      // Still return stats even when no bookmarks to tag
+      const { getUntaggedBookmarkCount, getTotalBookmarkCount } = await import('../services/promptGeneration');
+      const totalUntagged = await getUntaggedBookmarkCount();
+      const totalBookmarks = await getTotalBookmarkCount();
+      
+      return res.json({
+        success: true,
+        prompt: '',
+        bookmarkIds: [],
+        bookmarkCount: 0,
+        remainingCount: totalUntagged,
+        totalUntaggedCount: totalUntagged,
+        totalBookmarkCount: totalBookmarks,
+      });
+    }
+    
     logger.error('Error generating tagging prompt', error);
     return res.status(500).json({
       success: false,
