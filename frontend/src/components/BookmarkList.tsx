@@ -1,3 +1,4 @@
+import { useState, useRef, useEffect } from 'react';
 import { Bookmark, Tag } from '../services/api';
 
 interface BookmarkListProps {
@@ -6,7 +7,156 @@ interface BookmarkListProps {
   onTagClick?: (tag: Tag) => void;
 }
 
+interface BookmarkItemProps {
+  bookmark: Bookmark;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
+  onTagClick?: (tag: Tag) => void;
+  getSourceBadgeColor: (source: string) => string;
+  getTagStyle: (tag: Tag) => React.CSSProperties;
+  formatDate: (dateString: string) => string;
+  getFullDate: (dateString: string) => string;
+}
+
+function BookmarkItem({
+  bookmark,
+  isExpanded,
+  onToggleExpand,
+  onTagClick,
+  getSourceBadgeColor,
+  getTagStyle,
+  formatDate,
+  getFullDate,
+}: BookmarkItemProps) {
+  const contentRef = useRef<HTMLParagraphElement>(null);
+  const [showExpandButton, setShowExpandButton] = useState(false);
+
+  useEffect(() => {
+    if (contentRef.current && !isExpanded) {
+      // Check if content is truncated by comparing scrollHeight to clientHeight
+      const isTruncated =
+        contentRef.current.scrollHeight > contentRef.current.clientHeight;
+      setShowExpandButton(isTruncated);
+    } else if (isExpanded) {
+      // Always show "Show less" when expanded
+      setShowExpandButton(true);
+    }
+  }, [isExpanded, bookmark.content]);
+
+  const displayDate = bookmark.sourceCreatedAt || bookmark.createdAt;
+  const displayDateLabel = bookmark.sourceCreatedAt ? 'Posted' : 'Added';
+
+  return (
+    <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <span
+            className={`px-3 py-1 rounded-full text-xs font-semibold ${getSourceBadgeColor(
+              bookmark.source
+            )}`}
+          >
+            {bookmark.source.toUpperCase()}
+          </span>
+          <span className="text-xs text-gray-600 font-medium" title={getFullDate(displayDate)}>
+            {displayDateLabel}: {formatDate(displayDate)}
+          </span>
+          {bookmark.sourceCreatedAt && bookmark.createdAt && (
+            <span className="text-xs text-gray-400" title={getFullDate(bookmark.createdAt)}>
+              Added {formatDate(bookmark.createdAt)}
+            </span>
+          )}
+          {bookmark.lastIngestedAt && bookmark.lastIngestedAt !== bookmark.createdAt && (
+            <span className="text-xs text-gray-400" title={getFullDate(bookmark.lastIngestedAt)}>
+              Updated {formatDate(bookmark.lastIngestedAt)}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {bookmark.url && (
+        <a
+          href={bookmark.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-600 hover:text-blue-800 text-sm break-all mb-2 block"
+        >
+          {bookmark.url}
+        </a>
+      )}
+
+      {bookmark.content && (
+        <div className="mt-3">
+          <p
+            ref={contentRef}
+            className={`text-gray-700 text-sm whitespace-pre-wrap ${
+              isExpanded ? '' : 'line-clamp-3'
+            }`}
+          >
+            {bookmark.content}
+          </p>
+          {showExpandButton && (
+            <button
+              onClick={onToggleExpand}
+              className="mt-2 text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors"
+            >
+              {isExpanded ? 'Show less' : 'Show more'}
+            </button>
+          )}
+        </div>
+      )}
+
+      {bookmark.tags && bookmark.tags.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {bookmark.tags.map((tag) => (
+            <button
+              key={tag.id}
+              onClick={() => onTagClick?.(tag)}
+              className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border transition-colors ${
+                onTagClick ? 'cursor-pointer hover:opacity-80' : 'cursor-default'
+              }`}
+              style={getTagStyle(tag)}
+              title={tag.description || undefined}
+            >
+              <span>{tag.name}</span>
+              {tag.autoTagged && (
+                <span title="Auto-tagged">
+                  <svg
+                    className="w-3 h-3"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M13 10V3L4 14h7v7l9-11h-7z"
+                    />
+                  </svg>
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function BookmarkList({ bookmarks, isLoading, onTagClick }: BookmarkListProps) {
+  const [expandedBookmarks, setExpandedBookmarks] = useState<Set<string>>(new Set());
+
+  const toggleExpand = (bookmarkId: string) => {
+    setExpandedBookmarks((prev) => {
+      const next = new Set(prev);
+      if (next.has(bookmarkId)) {
+        next.delete(bookmarkId);
+      } else {
+        next.add(bookmarkId);
+      }
+      return next;
+    });
+  };
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -79,97 +229,19 @@ export default function BookmarkList({ bookmarks, isLoading, onTagClick }: Bookm
 
   return (
     <div className="space-y-4">
-      {bookmarks.map((bookmark) => {
-        // Determine which date to show (prefer sourceCreatedAt, fallback to createdAt)
-        const displayDate = bookmark.sourceCreatedAt || bookmark.createdAt;
-        const displayDateLabel = bookmark.sourceCreatedAt ? 'Posted' : 'Added';
-
-        return (
-          <div
-            key={bookmark.id}
-            className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
-          >
-            <div className="flex items-start justify-between mb-3">
-              <div className="flex items-center gap-3 flex-wrap">
-                <span
-                  className={`px-3 py-1 rounded-full text-xs font-semibold ${getSourceBadgeColor(
-                    bookmark.source
-                  )}`}
-                >
-                  {bookmark.source.toUpperCase()}
-                </span>
-                <span className="text-xs text-gray-600 font-medium" title={getFullDate(displayDate)}>
-                  {displayDateLabel}: {formatDate(displayDate)}
-                </span>
-                {bookmark.sourceCreatedAt && bookmark.createdAt && (
-                  <span className="text-xs text-gray-400" title={getFullDate(bookmark.createdAt)}>
-                    Added {formatDate(bookmark.createdAt)}
-                  </span>
-                )}
-                {bookmark.lastIngestedAt && bookmark.lastIngestedAt !== bookmark.createdAt && (
-                  <span className="text-xs text-gray-400" title={getFullDate(bookmark.lastIngestedAt)}>
-                    Updated {formatDate(bookmark.lastIngestedAt)}
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {bookmark.url && (
-              <a
-                href={bookmark.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-600 hover:text-blue-800 text-sm break-all mb-2 block"
-              >
-                {bookmark.url}
-              </a>
-            )}
-
-            {bookmark.content && (
-              <div className="mt-3">
-                <p className="text-gray-700 text-sm line-clamp-3 whitespace-pre-wrap">
-                  {bookmark.content}
-                </p>
-              </div>
-            )}
-
-            {bookmark.tags && bookmark.tags.length > 0 && (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {bookmark.tags.map((tag) => (
-                  <button
-                    key={tag.id}
-                    onClick={() => onTagClick?.(tag)}
-                    className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border transition-colors ${
-                      onTagClick ? 'cursor-pointer hover:opacity-80' : 'cursor-default'
-                    }`}
-                    style={getTagStyle(tag)}
-                    title={tag.description || undefined}
-                  >
-                    <span>{tag.name}</span>
-                    {tag.autoTagged && (
-                      <span title="Auto-tagged">
-                        <svg
-                          className="w-3 h-3"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M13 10V3L4 14h7v7l9-11h-7z"
-                          />
-                        </svg>
-                      </span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        );
-      })}
+      {bookmarks.map((bookmark) => (
+        <BookmarkItem
+          key={bookmark.id}
+          bookmark={bookmark}
+          isExpanded={expandedBookmarks.has(bookmark.id)}
+          onToggleExpand={() => toggleExpand(bookmark.id)}
+          onTagClick={onTagClick}
+          getSourceBadgeColor={getSourceBadgeColor}
+          getTagStyle={getTagStyle}
+          formatDate={formatDate}
+          getFullDate={getFullDate}
+        />
+      ))}
     </div>
   );
 }
