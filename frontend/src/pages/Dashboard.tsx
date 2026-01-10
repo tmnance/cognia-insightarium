@@ -414,6 +414,9 @@ export default function Dashboard() {
           bookmarks={paginatedBookmarks}
           isLoading={isLoading}
           onTagClick={handleTagClick}
+          onTagAdded={loadBookmarks}
+          onTagRemoved={loadBookmarks}
+          allTags={tags}
         />
 
         {/* Pagination - Bottom */}

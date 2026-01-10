@@ -8,7 +8,6 @@ import {
   getBookmarkTags,
   addTagToBookmark,
   removeTagFromBookmark,
-  getAllTagsWithCounts,
   getTagBySlug,
 } from '../services/tagService';
 
@@ -454,10 +453,10 @@ router.delete('/:id/tags/:tagId', async (req: Request, res: Response) => {
 });
 
 /**
- * GET /api/bookmarks/tagging/prompt
+ * GET /api/bookmarks/llm-tagging/prompt
  * Generate a prompt for LLM-based tag categorization
  */
-router.get('/tagging/prompt', async (req: Request, res: Response) => {
+router.get('/llm-tagging/prompt', async (req: Request, res: Response) => {
   try {
     const limit = parseInt(req.query.limit as string) || 20;
     const { generateTaggingPrompt } = await import('../services/promptGeneration');
@@ -483,10 +482,10 @@ router.get('/tagging/prompt', async (req: Request, res: Response) => {
 });
 
 /**
- * POST /api/bookmarks/tagging/apply
+ * POST /api/bookmarks/llm-tagging/apply
  * Apply tags from LLM response
  */
-router.post('/tagging/apply', async (req: Request, res: Response) => {
+router.post('/llm-tagging/apply', async (req: Request, res: Response) => {
   try {
     const { llmResponse } = req.body;
 
@@ -535,7 +534,7 @@ router.post('/tagging/apply', async (req: Request, res: Response) => {
               continue;
             }
 
-            await addTagToBookmark(item.bookmarkId, tag.id, false, null);
+            await addTagToBookmark(item.bookmarkId, tag.id, true, null);
             tagApplied = true;
           } catch (tagError) {
             logger.error('Error applying tag to bookmark', {

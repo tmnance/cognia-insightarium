@@ -135,7 +135,7 @@ export const bookmarkApi = {
     // Generate prompt for LLM tagging
     generatePrompt: async (limit?: number): Promise<{ prompt: string; bookmarkIds: string[]; bookmarkCount: number; remainingCount: number; totalUntaggedCount: number; totalBookmarkCount: number }> => {
       const params = limit ? { limit: limit.toString() } : {};
-      const response = await api.get<{ success: boolean; prompt: string; bookmarkIds: string[]; bookmarkCount: number; remainingCount: number; totalUntaggedCount: number; totalBookmarkCount: number }>('/bookmarks/tagging/prompt', { params });
+      const response = await api.get<{ success: boolean; prompt: string; bookmarkIds: string[]; bookmarkCount: number; remainingCount: number; totalUntaggedCount: number; totalBookmarkCount: number }>('/bookmarks/llm-tagging/prompt', { params });
       return {
         prompt: response.data.prompt,
         bookmarkIds: response.data.bookmarkIds,
@@ -147,7 +147,7 @@ export const bookmarkApi = {
     },
     // Apply tags from LLM response
     applyResponse: async (llmResponse: string): Promise<{ processed: number; tagged: number; errors?: Array<{ bookmarkId: string; error: string }> }> => {
-      const response = await api.post<{ success: boolean; processed: number; tagged: number; errors?: Array<{ bookmarkId: string; error: string }> }>('/bookmarks/tagging/apply', { llmResponse });
+      const response = await api.post<{ success: boolean; processed: number; tagged: number; errors?: Array<{ bookmarkId: string; error: string }> }>('/bookmarks/llm-tagging/apply', { llmResponse });
       return {
         processed: response.data.processed,
         tagged: response.data.tagged,

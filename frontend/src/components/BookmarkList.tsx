@@ -1,10 +1,13 @@
 import { useState, useRef, useEffect } from 'react';
-import { Bookmark, Tag } from '../services/api';
+import { Bookmark, Tag, bookmarkApi } from '../services/api';
 
 interface BookmarkListProps {
   bookmarks: Bookmark[];
   isLoading?: boolean;
   onTagClick?: (tag: Tag) => void;
+  onTagAdded?: (bookmarkId: string) => void;
+  onTagRemoved?: (bookmarkId: string) => void;
+  allTags?: Tag[];
 }
 
 interface BookmarkItemProps {
@@ -12,6 +15,9 @@ interface BookmarkItemProps {
   isExpanded: boolean;
   onToggleExpand: () => void;
   onTagClick?: (tag: Tag) => void;
+  onTagAdded?: (bookmarkId: string) => void;
+  onTagRemoved?: (bookmarkId: string) => void;
+  allTags?: Tag[];
   getSourceBadgeColor: (source: string) => string;
   getTagStyle: (tag: Tag) => React.CSSProperties;
   formatDate: (dateString: string) => string;
@@ -23,6 +29,9 @@ function BookmarkItem({
   isExpanded,
   onToggleExpand,
   onTagClick,
+  onTagAdded,
+  onTagRemoved,
+  allTags = [],
   getSourceBadgeColor,
   getTagStyle,
   formatDate,
@@ -30,6 +39,59 @@ function BookmarkItem({
 }: BookmarkItemProps) {
   const contentRef = useRef<HTMLParagraphElement>(null);
   const [showExpandButton, setShowExpandButton] = useState(false);
+  const [showTagSelector, setShowTagSelector] = useState(false);
+  const [isRemovingTag, setIsRemovingTag] = useState<string | null>(null);
+  const [isAddingTag, setIsAddingTag] = useState(false);
+  const tagSelectorRef = useRef<HTMLDivElement>(null);
+
+  // Close tag selector when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (tagSelectorRef.current && !tagSelectorRef.current.contains(event.target as Node)) {
+        setShowTagSelector(false);
+      }
+    };
+
+    if (showTagSelector) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showTagSelector]);
+
+  const handleRemoveTag = async (e: React.MouseEvent, tagId: string) => {
+    e.stopPropagation();
+    if (isRemovingTag) return;
+    
+    setIsRemovingTag(tagId);
+    try {
+      await bookmarkApi.bookmarkTags.remove(bookmark.id, tagId);
+      onTagRemoved?.(bookmark.id);
+    } catch (error) {
+      console.error('Failed to remove tag:', error);
+    } finally {
+      setIsRemovingTag(null);
+    }
+  };
+
+  const handleAddTag = async (tagId: string) => {
+    if (isAddingTag) return;
+    
+    setIsAddingTag(true);
+    try {
+      await bookmarkApi.bookmarkTags.add(bookmark.id, tagId);
+      setShowTagSelector(false);
+      onTagAdded?.(bookmark.id);
+    } catch (error) {
+      console.error('Failed to add tag:', error);
+    } finally {
+      setIsAddingTag(false);
+    }
+  };
+
+  // Get available tags (tags not already on this bookmark)
+  const availableTags = allTags.filter(
+    (tag) => !bookmark.tags?.some((bt) => bt.id === tag.id)
+  );
 
   useEffect(() => {
     if (contentRef.current && !isExpanded) {
@@ -105,21 +167,48 @@ function BookmarkItem({
         </div>
       )}
 
-      {bookmark.tags && bookmark.tags.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-2">
-          {bookmark.tags.map((tag) => (
-            <button
-              key={tag.id}
-              onClick={() => onTagClick?.(tag)}
-              className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border transition-colors ${
-                onTagClick ? 'cursor-pointer hover:opacity-80' : 'cursor-default'
-              }`}
-              style={getTagStyle(tag)}
-              title={tag.description || undefined}
-            >
-              <span>{tag.name}</span>
-              {tag.autoTagged && (
-                <span title="Auto-tagged">
+      <div className="mt-3 flex flex-wrap gap-2 items-center">
+        {bookmark.tags && bookmark.tags.length > 0 && (
+          <>
+            {bookmark.tags.map((tag) => (
+              <div
+                key={tag.id}
+                className="inline-flex items-center gap-1 rounded-md text-xs font-medium border"
+                style={getTagStyle(tag)}
+              >
+                <button
+                  onClick={() => onTagClick?.(tag)}
+                  className={`flex items-center gap-1 px-2 py-1 rounded-l-md transition-colors ${
+                    onTagClick ? 'hover:opacity-80' : ''
+                  }`}
+                  title={tag.description || undefined}
+                >
+                  <span>{tag.name}</span>
+                  {tag.autoTagged && (
+                    <span title="Auto-tagged">
+                      <svg
+                        className="w-3 h-3"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M13 10V3L4 14h7v7l9-11h-7z"
+                        />
+                      </svg>
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={(e) => handleRemoveTag(e, tag.id)}
+                  disabled={isRemovingTag === tag.id}
+                  className="px-1 py-1 rounded-r-md hover:bg-black/10 transition-colors disabled:opacity-50 border-l"
+                  style={{ borderLeftColor: 'currentColor', opacity: 0.3 }}
+                  title="Remove tag"
+                >
                   <svg
                     className="w-3 h-3"
                     fill="none"
@@ -130,20 +219,75 @@ function BookmarkItem({
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       strokeWidth={2}
-                      d="M13 10V3L4 14h7v7l9-11h-7z"
+                      d="M6 18L18 6M6 6l12 12"
                     />
                   </svg>
-                </span>
+                </button>
+              </div>
+            ))}
+          </>
+        )}
+        <div className="relative" ref={tagSelectorRef}>
+          <button
+            onClick={() => setShowTagSelector(!showTagSelector)}
+            disabled={isAddingTag}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border border-gray-300 bg-gray-50 text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-50"
+            title="Add tag"
+          >
+            <svg
+              className="w-3 h-3"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 4v16m8-8H4"
+              />
+            </svg>
+            <span>Add tag</span>
+          </button>
+          {showTagSelector && (
+            <div className="absolute z-10 mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto min-w-[200px]">
+              {availableTags.length > 0 ? (
+                <ul className="py-1">
+                  {availableTags.map((tag) => (
+                    <li key={tag.id}>
+                      <button
+                        onClick={() => handleAddTag(tag.id)}
+                        disabled={isAddingTag}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 transition-colors disabled:opacity-50 flex items-center gap-2"
+                      >
+                        <span
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: tag.color || '#gray' }}
+                        />
+                        <span>{tag.name}</span>
+                        {tag.description && (
+                          <span className="text-xs text-gray-500 ml-auto truncate max-w-[150px]">
+                            {tag.description}
+                          </span>
+                        )}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="px-3 py-2 text-sm text-gray-500">
+                  No tags available to add
+                </div>
               )}
-            </button>
-          ))}
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
 
-export default function BookmarkList({ bookmarks, isLoading, onTagClick }: BookmarkListProps) {
+export default function BookmarkList({ bookmarks, isLoading, onTagClick, onTagAdded, onTagRemoved, allTags }: BookmarkListProps) {
   const [expandedBookmarks, setExpandedBookmarks] = useState<Set<string>>(new Set());
 
   const toggleExpand = (bookmarkId: string) => {
@@ -236,6 +380,9 @@ export default function BookmarkList({ bookmarks, isLoading, onTagClick }: Bookm
           isExpanded={expandedBookmarks.has(bookmark.id)}
           onToggleExpand={() => toggleExpand(bookmark.id)}
           onTagClick={onTagClick}
+          onTagAdded={onTagAdded}
+          onTagRemoved={onTagRemoved}
+          allTags={allTags}
           getSourceBadgeColor={getSourceBadgeColor}
           getTagStyle={getTagStyle}
           formatDate={formatDate}
