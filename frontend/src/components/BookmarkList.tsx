@@ -42,13 +42,39 @@ function BookmarkItem({
   const [showTagSelector, setShowTagSelector] = useState(false);
   const [isRemovingTag, setIsRemovingTag] = useState<string | null>(null);
   const [isAddingTag, setIsAddingTag] = useState(false);
+  const [tagFilterQuery, setTagFilterQuery] = useState('');
+  const [selectedTagIndex, setSelectedTagIndex] = useState(0);
   const tagSelectorRef = useRef<HTMLDivElement>(null);
+  const tagFilterInputRef = useRef<HTMLInputElement>(null);
+
+  // Get available tags (tags not already on this bookmark)
+  const availableTags = allTags.filter(
+    (tag) => !bookmark.tags?.some((bt) => bt.id === tag.id)
+  );
+
+  // Get filtered tags based on query
+  const getFilteredTags = () => {
+    if (!tagFilterQuery.trim()) {
+      return availableTags;
+    }
+    const query = tagFilterQuery.toLowerCase();
+    return availableTags.filter(
+      (tag) =>
+        tag.name.toLowerCase().includes(query) ||
+        tag.description?.toLowerCase().includes(query) ||
+        tag.slug.toLowerCase().includes(query)
+    );
+  };
+
+  const filteredTags = getFilteredTags();
 
   // Close tag selector when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (tagSelectorRef.current && !tagSelectorRef.current.contains(event.target as Node)) {
         setShowTagSelector(false);
+        setTagFilterQuery('');
+        setSelectedTagIndex(0);
       }
     };
 
@@ -57,6 +83,51 @@ function BookmarkItem({
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
   }, [showTagSelector]);
+
+  // Auto-focus input when dropdown opens
+  useEffect(() => {
+    if (showTagSelector && tagFilterInputRef.current) {
+      tagFilterInputRef.current.focus();
+    }
+  }, [showTagSelector]);
+
+  // Handle keyboard events for tag selector
+  useEffect(() => {
+    if (!showTagSelector) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Don't handle keyboard events if user is typing in the input (except navigation keys)
+      if (event.target === tagFilterInputRef.current && event.key !== 'ArrowDown' && event.key !== 'ArrowUp' && event.key !== 'Enter' && event.key !== 'Escape') {
+        return;
+      }
+
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setShowTagSelector(false);
+        setTagFilterQuery('');
+        setSelectedTagIndex(0);
+        return;
+      }
+
+      const filtered = getFilteredTags();
+
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        setSelectedTagIndex((prev) => (prev < filtered.length - 1 ? prev + 1 : prev));
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        setSelectedTagIndex((prev) => (prev > 0 ? prev - 1 : 0));
+      } else if (event.key === 'Enter') {
+        event.preventDefault();
+        if (filtered.length > 0 && selectedTagIndex < filtered.length) {
+          handleAddTag(filtered[selectedTagIndex].id);
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [showTagSelector, tagFilterQuery, selectedTagIndex]);
 
   const handleRemoveTag = async (e: React.MouseEvent, tagId: string) => {
     e.stopPropagation();
@@ -80,6 +151,8 @@ function BookmarkItem({
     try {
       await bookmarkApi.bookmarkTags.add(bookmark.id, tagId);
       setShowTagSelector(false);
+      setTagFilterQuery('');
+      setSelectedTagIndex(0);
       onTagAdded?.(bookmark.id);
     } catch (error) {
       console.error('Failed to add tag:', error);
@@ -88,10 +161,24 @@ function BookmarkItem({
     }
   };
 
-  // Get available tags (tags not already on this bookmark)
-  const availableTags = allTags.filter(
-    (tag) => !bookmark.tags?.some((bt) => bt.id === tag.id)
-  );
+  // Reset selected index when filter changes
+  useEffect(() => {
+    const currentFiltered = getFilteredTags();
+    if (selectedTagIndex >= currentFiltered.length && currentFiltered.length > 0) {
+      setSelectedTagIndex(Math.max(0, currentFiltered.length - 1));
+    } else if (currentFiltered.length === 0) {
+      setSelectedTagIndex(0);
+    }
+  }, [tagFilterQuery, availableTags.length]);
+
+  const handleToggleTagSelector = () => {
+    const newState = !showTagSelector;
+    setShowTagSelector(newState);
+    if (!newState) {
+      setTagFilterQuery('');
+      setSelectedTagIndex(0);
+    }
+  };
 
   useEffect(() => {
     if (contentRef.current && !isExpanded) {
@@ -229,7 +316,7 @@ function BookmarkItem({
         )}
         <div className="relative" ref={tagSelectorRef}>
           <button
-            onClick={() => setShowTagSelector(!showTagSelector)}
+            onClick={handleToggleTagSelector}
             disabled={isAddingTag}
             className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border border-gray-300 bg-gray-50 text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-50"
             title="Add tag"
@@ -250,35 +337,71 @@ function BookmarkItem({
             <span>Add tag</span>
           </button>
           {showTagSelector && (
-            <div className="absolute z-10 mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto min-w-[200px]">
-              {availableTags.length > 0 ? (
-                <ul className="py-1">
-                  {availableTags.map((tag) => (
-                    <li key={tag.id}>
-                      <button
-                        onClick={() => handleAddTag(tag.id)}
-                        disabled={isAddingTag}
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 transition-colors disabled:opacity-50 flex items-center gap-2"
-                      >
-                        <span
-                          className="w-3 h-3 rounded-full"
-                          style={{ backgroundColor: tag.color || '#gray' }}
-                        />
-                        <span>{tag.name}</span>
-                        {tag.description && (
-                          <span className="text-xs text-gray-500 ml-auto truncate max-w-[150px]">
-                            {tag.description}
-                          </span>
-                        )}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <div className="px-3 py-2 text-sm text-gray-500">
-                  No tags available to add
-                </div>
-              )}
+            <div className="absolute z-10 mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-hidden min-w-[200px] flex flex-col">
+              {/* Filter input */}
+              <div className="p-2 border-b border-gray-200">
+                <input
+                  ref={tagFilterInputRef}
+                  type="text"
+                  value={tagFilterQuery}
+                  onChange={(e) => {
+                    setTagFilterQuery(e.target.value);
+                    setSelectedTagIndex(0);
+                  }}
+                  placeholder="Filter tags..."
+                  className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  onKeyDown={(e) => {
+                    // Prevent form submission if this is inside a form
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      if (filteredTags.length > 0 && selectedTagIndex < filteredTags.length) {
+                        handleAddTag(filteredTags[selectedTagIndex].id);
+                      }
+                    }
+                  }}
+                />
+              </div>
+              
+              {/* Tag list */}
+              <div className="overflow-y-auto max-h-48">
+                {filteredTags.length > 0 ? (
+                  <ul className="py-1">
+                    {filteredTags.map((tag, index) => (
+                      <li key={tag.id}>
+                        <button
+                          onClick={() => handleAddTag(tag.id)}
+                          disabled={isAddingTag}
+                          className={`w-full text-left px-3 py-2 text-sm transition-colors disabled:opacity-50 flex items-center gap-2 ${
+                            index === selectedTagIndex
+                              ? 'bg-blue-50 text-blue-900'
+                              : 'hover:bg-gray-100'
+                          }`}
+                          onMouseEnter={() => setSelectedTagIndex(index)}
+                        >
+                          <span
+                            className="w-3 h-3 rounded-full"
+                            style={{ backgroundColor: tag.color || '#gray' }}
+                          />
+                          <span>{tag.name}</span>
+                          {tag.description && (
+                            <span className="text-xs text-gray-500 ml-auto truncate max-w-[150px]">
+                              {tag.description}
+                            </span>
+                          )}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="px-3 py-2 text-sm text-gray-500">
+                    {availableTags.length === 0
+                      ? 'No tags available to add'
+                      : tagFilterQuery.trim()
+                      ? `No tags match "${tagFilterQuery}"`
+                      : 'No tags available to add'}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>

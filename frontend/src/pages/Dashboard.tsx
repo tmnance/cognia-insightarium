@@ -51,6 +51,46 @@ export default function Dashboard() {
     }
   };
 
+  const handleTagAdded = async (bookmarkId: string) => {
+    try {
+      // Fetch the updated tags for this bookmark
+      const updatedTags = await bookmarkApi.bookmarkTags.getByBookmarkId(bookmarkId);
+      
+      // Update the bookmark in-place without reloading
+      setAllBookmarks((prev) =>
+        prev.map((bookmark) =>
+          bookmark.id === bookmarkId
+            ? { ...bookmark, tags: updatedTags }
+            : bookmark
+        )
+      );
+    } catch (error) {
+      console.error('Failed to fetch updated tags:', error);
+      // Fallback to full reload if in-place update fails
+      loadBookmarks();
+    }
+  };
+
+  const handleTagRemoved = async (bookmarkId: string) => {
+    try {
+      // Fetch the updated tags for this bookmark
+      const updatedTags = await bookmarkApi.bookmarkTags.getByBookmarkId(bookmarkId);
+      
+      // Update the bookmark in-place without reloading
+      setAllBookmarks((prev) =>
+        prev.map((bookmark) =>
+          bookmark.id === bookmarkId
+            ? { ...bookmark, tags: updatedTags }
+            : bookmark
+        )
+      );
+    } catch (error) {
+      console.error('Failed to fetch updated tags:', error);
+      // Fallback to full reload if in-place update fails
+      loadBookmarks();
+    }
+  };
+
   useEffect(() => {
     loadTags();
   }, []);
@@ -414,8 +454,8 @@ export default function Dashboard() {
           bookmarks={paginatedBookmarks}
           isLoading={isLoading}
           onTagClick={handleTagClick}
-          onTagAdded={loadBookmarks}
-          onTagRemoved={loadBookmarks}
+          onTagAdded={handleTagAdded}
+          onTagRemoved={handleTagRemoved}
           allTags={tags}
         />
 
