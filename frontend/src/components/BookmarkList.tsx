@@ -209,14 +209,13 @@ function BookmarkItem({
           <span className="text-xs text-gray-600 font-medium" title={getFullDate(displayDate)}>
             {displayDateLabel}: {formatDate(displayDate)}
           </span>
-          {bookmark.sourceCreatedAt && bookmark.createdAt && (
-            <span className="text-xs text-gray-400" title={getFullDate(bookmark.createdAt)}>
-              Added {formatDate(bookmark.createdAt)}
-            </span>
-          )}
-          {bookmark.lastIngestedAt && bookmark.lastIngestedAt !== bookmark.createdAt && (
-            <span className="text-xs text-gray-400" title={getFullDate(bookmark.lastIngestedAt)}>
-              Updated {formatDate(bookmark.lastIngestedAt)}
+          {((bookmark.sourceCreatedAt && bookmark.createdAt) ||
+            (bookmark.lastIngestedAt && bookmark.lastIngestedAt !== bookmark.createdAt)) && (
+            <span
+              className="text-xs text-gray-400"
+              title={getFullDate(bookmark.lastIngestedAt ?? bookmark.createdAt)}
+            >
+              Synced {formatDate(bookmark.lastIngestedAt ?? bookmark.createdAt)}
             </span>
           )}
         </div>
@@ -427,11 +426,22 @@ export default function BookmarkList({ bookmarks, isLoading, onTagClick, onTagAd
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    const toMidnight = (d: Date) => {
+      const x = new Date(d);
+      x.setHours(0, 0, 0, 0);
+      return x.getTime();
+    };
+    const todayStart = toMidnight(now);
+    const dateStart = toMidnight(date);
+    const diffDays = Math.floor((todayStart - dateStart) / (1000 * 60 * 60 * 24));
+
+    const timeStr = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
     if (diffDays === 0) {
-      return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      return `Today at ${timeStr}`;
+    } else if (diffDays === 1) {
+      return `Yesterday at ${timeStr}`;
     } else if (diffDays < 7) {
       return `${diffDays}d ago`;
     } else if (diffDays < 365) {
