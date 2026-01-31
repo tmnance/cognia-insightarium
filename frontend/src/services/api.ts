@@ -107,6 +107,19 @@ export const bookmarkApi = {
       const response = await api.get<{ success: boolean; tag: Tag }>(`/tags/${slug}`);
       return response.data.tag;
     },
+    // Create a new tag
+    create: async (data: {
+      name: string;
+      slug: string;
+      description?: string | null;
+      color?: string | null;
+    }): Promise<Tag> => {
+      const response = await api.post<{ success: boolean; tag: Tag }>('/tags', data);
+      if (!response.data.tag) {
+        throw new Error(response.data.error || 'Failed to create tag');
+      }
+      return response.data.tag;
+    },
   },
 
   // Bookmark tag management

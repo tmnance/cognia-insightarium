@@ -248,6 +248,12 @@ export default function Dashboard() {
               + Add Bookmark
             </button>
             <button
+              onClick={() => navigate('/tags')}
+              className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium shadow-sm"
+            >
+              Manage Tags
+            </button>
+            <button
               onClick={() => navigate('/tagging')}
               className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium shadow-sm"
             >

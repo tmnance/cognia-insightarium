@@ -24,6 +24,50 @@ export interface TagWithCount {
 }
 
 /**
+ * Create a new tag. Throws if a tag with the same slug or name already exists.
+ */
+export async function createTag(
+  name: string,
+  slug: string,
+  description?: string | null,
+  color?: string | null
+) {
+  try {
+    const existingBySlug = await prisma.tag.findUnique({
+      where: { slug },
+    });
+    if (existingBySlug) {
+      throw new Error(`A tag with slug "${slug}" already exists`);
+    }
+
+    const existingByName = await prisma.tag.findUnique({
+      where: { name },
+    });
+    if (existingByName) {
+      throw new Error(`A tag with name "${name}" already exists`);
+    }
+
+    const tag = await prisma.tag.create({
+      data: {
+        name,
+        slug,
+        description: description ?? null,
+        color: color ?? null,
+      },
+    });
+
+    logger.info('Created new tag', { id: tag.id, name, slug });
+    return tag;
+  } catch (error) {
+    if (error instanceof Error && (error.message.includes('already exists'))) {
+      throw error;
+    }
+    logger.error('Error creating tag', { error, name, slug });
+    throw error;
+  }
+}
+
+/**
  * Get or create a tag by name and slug
  */
 export async function getOrCreateTag(
