@@ -123,7 +123,7 @@ export async function generateTaggingPrompt(
       2
     );
 
-    let prompt = `You are helping categorize bookmarks by analyzing their content.
+    const prompt = `You are helping categorize bookmarks by analyzing their content.
 
 AVAILABLE TAGS (JSON format):
 ${availableTagsJson}

@@ -85,11 +85,17 @@ router.post('/url', async (req: Request, res: Response) => {
   }
 });
 
+/** Item shape used when extracting bookmark source/url (e.g. from bulk body or platform payload) */
+interface BookmarkItemLike {
+  platform?: string;
+  url?: string | null;
+}
+
 /**
  * Helper function to extract external ID and source from an item
  * Matches the logic used in bulk save endpoint
  */
-function extractBookmarkData(item: any): { source: string; externalId: string | null; url: string | null } {
+function extractBookmarkData(item: BookmarkItemLike): { source: string; externalId: string | null; url: string | null } {
   let externalId: string | null = null;
   let source = 'url';
 
@@ -264,7 +270,7 @@ router.get('/', async (req: Request, res: Response) => {
   try {
     const { source, tags } = req.query;
 
-    const where: any = {};
+    const where: { source?: string; tags?: { some: { tag: { slug: { in: string[] } } } } } = {};
 
     if (source) {
       where.source = source as string;

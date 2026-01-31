@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import { prisma } from '../db/prismaClient';
 import { logger } from './logger';
 
@@ -67,7 +68,7 @@ export async function updateBookmark(bookmarkId: string, data: Partial<BookmarkD
       : data.sourceCreatedAt
     : undefined;
 
-  const updateData: any = {
+  const updateData: Prisma.BookmarkUpdateInput = {
     lastIngestedAt: now,
   };
 
@@ -104,7 +105,7 @@ export async function createBookmarkIfNotExists(data: BookmarkData) {
   if (existing) {
     // Update lastIngestedAt for existing bookmark
     // Also update sourceCreatedAt if it's not set and we have a value
-    const updateData: any = {
+    const updateData: Prisma.BookmarkUpdateInput = {
       lastIngestedAt: now,
     };
     if (!existing.sourceCreatedAt && sourceCreatedAt) {

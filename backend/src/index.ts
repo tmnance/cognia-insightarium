@@ -36,7 +36,7 @@ app.use('/api/content', contentRoutes);
 app.use('/api/tags', tagRoutes);
 
 // Error handling middleware
-app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+app.use((err: Error, _req: express.Request, res: express.Response) => {
   logger.error('Unhandled error', err);
   res.status(500).json({
     success: false,

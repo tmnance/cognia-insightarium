@@ -4,6 +4,7 @@
  * Manages tags and bookmark-tag relationships
  */
 
+import { Tag } from '@prisma/client';
 import { prisma } from '../db/prismaClient';
 import { logger } from '../utils/logger';
 import {
@@ -304,7 +305,7 @@ export async function getBookmarkTags(bookmarkId: string) {
       ],
     });
 
-    return bookmarkTags.map((bt: { id: string; autoTagged: boolean; confidence: number | null; tag: any }) => ({
+    return bookmarkTags.map((bt: { id: string; autoTagged: boolean; confidence: number | null; tag: Tag }) => ({
       ...bt.tag,
       autoTagged: bt.autoTagged,
       confidence: bt.confidence,
@@ -419,7 +420,7 @@ export async function getAllTagsWithCounts(): Promise<TagWithCount[]> {
       },
     });
 
-    return tags.map((tag: any) => ({
+    return tags.map((tag: Tag & { _count: { bookmarks: number } }) => ({
       id: tag.id,
       name: tag.name,
       slug: tag.slug,
