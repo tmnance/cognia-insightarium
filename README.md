@@ -58,7 +58,7 @@ cd cognia-insightarium
 npm install
 ```
 
-This installs dependencies for the root workspace, backend, and frontend.
+This installs dependencies for the root workspace, backend, and frontend. It also configures **Git hooks** (Husky): the `prepare` script runs automatically and sets up a pre-commit hook that runs lint-staged (ESLint --fix on staged files). If pre-commit never runs after cloning, ensure you ran `npm install` from the repo root, then run `npm run prepare` once.
 
 ### 2. Database Setup
 
