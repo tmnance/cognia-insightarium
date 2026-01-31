@@ -10,6 +10,25 @@ function slugFromName(name: string): string {
     .replace(/^-|-$/g, '');
 }
 
+/** Parse hex color with or without #; 3-digit (e.g. ccc) becomes 6-digit (#cccccc). Returns #rrggbb or ''. */
+function normalizeHex(str: string): string {
+  const s = str.trim().replace(/^#/, '');
+  if (/^[0-9a-fA-F]{3}$/.test(s)) {
+    return '#' + s[0] + s[0] + s[1] + s[1] + s[2] + s[2];
+  }
+  if (/^[0-9a-fA-F]{6}$/.test(s)) {
+    return '#' + s.toLowerCase();
+  }
+  return '';
+}
+
+/** Ensure color has a leading # for display (e.g. in title). */
+function toHexWithHash(color: string | null | undefined): string | undefined {
+  if (!color?.trim()) return undefined;
+  const c = color.trim();
+  return c.startsWith('#') ? c : `#${c}`;
+}
+
 export default function TagManagement() {
   const navigate = useNavigate();
   const [tags, setTags] = useState<Tag[]>([]);
@@ -22,6 +41,7 @@ export default function TagManagement() {
   const [slug, setSlug] = useState('');
   const [description, setDescription] = useState('');
   const [color, setColor] = useState('');
+  const [copyFeedback, setCopyFeedback] = useState(false);
 
   const loadTags = async () => {
     try {
@@ -72,7 +92,7 @@ export default function TagManagement() {
         name: trimmedName,
         slug: trimmedSlug,
         description: description.trim() || null,
-        color: color.trim() || null,
+        color: normalizeHex(color) || null,
       });
       setSuccess('Tag created successfully');
       setName('');
@@ -172,19 +192,18 @@ export default function TagManagement() {
                   placeholder="#3b82f6"
                   className="w-32 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
                 />
-                {color && (
-                  <span
-                    className="w-8 h-8 rounded border border-gray-300"
-                    style={{
-                      backgroundColor: /^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(color)
-                        ? color
-                        : 'transparent',
-                    }}
-                    title="Preview"
-                  />
-                )}
+                <input
+                  type="color"
+                  value={normalizeHex(color) || '#000000'}
+                  onChange={(e) => setColor(e.target.value)}
+                  className="w-10 h-10 cursor-pointer rounded border border-gray-300 p-0 flex-shrink-0"
+                  title="Pick color"
+                  aria-label="Pick color"
+                />
               </div>
-              <p className="mt-1 text-xs text-gray-500">Hex code, e.g. #3b82f6 or #f00</p>
+              <p className="mt-1 text-xs text-gray-500">
+                Hex code with or without #, e.g. #3b82f6, ccc, or #f00
+              </p>
             </div>
             <button
               type="submit"
@@ -198,7 +217,30 @@ export default function TagManagement() {
 
         {/* Existing tags list */}
         <div className="bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">All Tags</h2>
+          <div className="flex items-center justify-between gap-4 mb-4">
+            <h2 className="text-xl font-bold text-gray-900">All Tags</h2>
+            <button
+              type="button"
+              onClick={async () => {
+                const json = JSON.stringify(
+                  tags.map((t) => ({
+                    name: t.name,
+                    slug: t.slug,
+                    description: t.description ?? null,
+                    color: toHexWithHash(t.color) ?? null,
+                  })),
+                  null,
+                  2
+                );
+                await navigator.clipboard.writeText(json);
+                setCopyFeedback(true);
+                setTimeout(() => setCopyFeedback(false), 2000);
+              }}
+              className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
+            >
+              {copyFeedback ? 'Copied!' : 'Copy Json'}
+            </button>
+          </div>
           {isLoading ? (
             <div className="flex justify-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
@@ -216,6 +258,7 @@ export default function TagManagement() {
                     <span
                       className="w-4 h-4 rounded flex-shrink-0"
                       style={{ backgroundColor: tag.color }}
+                      title={toHexWithHash(tag.color)}
                       aria-hidden
                     />
                   )}
