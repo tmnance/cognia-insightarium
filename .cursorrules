@@ -1,0 +1,17 @@
+# Cognia Insightarium - Cursor AI Rules
+
+## Database (Prisma)
+
+- Use **migrations** for schema changes: `npx prisma migrate dev --name descriptive_name`. Do not use `db push` (no migration history).
+- Commit both schema edits and the new migration file.
+
+## Backend API
+
+- **Serialization** – Use `backend/src/serializers/` for API response shapes. Don’t build JSON inline in routes.
+- **Routes vs services** – Routes validate, call a service, serialize, respond. Put business logic and Prisma in services; don’t reimplement metadata/cleanup in routes.
+- **Errors** – Handlers can throw; central handler in `index.ts` maps messages to 404/400/500. Throw clear messages from services.
+- **Validation** – Zod schemas in `validators/schemas.ts`; use `validateBody` / `validateQuery` middleware on routes with body/query.
+
+## General
+
+- TypeScript throughout. Follow existing patterns. Backend: `backend/src/`, frontend: `frontend/src/`.
