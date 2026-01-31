@@ -11,16 +11,19 @@
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:backend": "cd backend && npm run dev",
     "dev:frontend": "cd frontend && npm run dev",
-    "lint": "npm run lint:backend && npm run lint:frontend",
-    "lint:backend": "cd backend && npm run lint",
-    "lint:frontend": "cd frontend && npm run lint",
+    "lint": "eslint backend frontend",
+    "lint:backend": "eslint backend",
+    "lint:frontend": "eslint frontend",
     "format": "npm run format:backend && npm run format:frontend",
     "format:backend": "cd backend && npm run format",
     "format:frontend": "cd frontend && npm run format",
     "prepare": "husky"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.2.0",
+    "@eslint/js": "^9.18.0",
     "concurrently": "^9.1.2",
+    "globals": "^16.0.0",
     "husky": "^9.0.11",
     "lint-staged": "^15.2.0"
   },
