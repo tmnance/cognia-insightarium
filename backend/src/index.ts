@@ -16,8 +16,9 @@ app.use(
   })
 );
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Allow larger payloads for bulk check-duplicates and bulk save (e.g. 300+ X bookmarks)
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
 // Request logging
 app.use((req, _res, next) => {
@@ -35,7 +36,7 @@ app.use('/api/bookmarks', bookmarkRoutes);
 app.use('/api/content', contentRoutes);
 app.use('/api/tags', tagRoutes);
 
-// Error handling middleware
+// Error handling middleware (must have 4 params so Express treats it as error handler)
 app.use((err: Error, _req: express.Request, res: express.Response) => {
   logger.error('Unhandled error', err);
   res.status(500).json({

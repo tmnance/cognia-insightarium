@@ -83,16 +83,23 @@ export const bookmarkApi = {
     };
   },
 
-  // Check for duplicates and changes
+  // Check for duplicates and changes (batched to avoid 413 Payload Too Large)
   checkDuplicates: async (items: Array<{ platform: string; url?: string; text?: string; author?: string; timestamp?: string }>): Promise<{ duplicateIndices: number[]; changedIndices: number[] }> => {
-    const response = await api.post<{ success: boolean; duplicateIndices: number[]; changedIndices: number[]; duplicateCount: number; changedCount: number }>('/bookmarks/check-duplicates', items);
-    if (!response.data.success) {
-      throw new Error('Failed to check for duplicates');
+    const BATCH_SIZE = 100;
+    const duplicateIndices: number[] = [];
+    const changedIndices: number[] = [];
+
+    for (let offset = 0; offset < items.length; offset += BATCH_SIZE) {
+      const batch = items.slice(offset, offset + BATCH_SIZE);
+      const response = await api.post<{ success: boolean; duplicateIndices: number[]; changedIndices: number[]; duplicateCount: number; changedCount: number }>('/bookmarks/check-duplicates', batch);
+      if (!response.data.success) {
+        throw new Error('Failed to check for duplicates');
+      }
+      duplicateIndices.push(...response.data.duplicateIndices.map((i) => i + offset));
+      changedIndices.push(...response.data.changedIndices.map((i) => i + offset));
     }
-    return {
-      duplicateIndices: response.data.duplicateIndices,
-      changedIndices: response.data.changedIndices,
-    };
+
+    return { duplicateIndices, changedIndices };
   },
 
   // Tag-related methods
