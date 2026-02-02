@@ -311,9 +311,9 @@ export function getTagDefinitionByName(name: string): TagDefinition | undefined 
 }
 
 /**
- * Get all tag definitions
+ * Get all defaulttag definitions
  */
-export function getAllTagDefinitions(): TagDefinition[] {
+export function getAllDefaultTagDefinitions(): TagDefinition[] {
   return [...DEFAULT_TAG_DEFINITIONS];
 }
 

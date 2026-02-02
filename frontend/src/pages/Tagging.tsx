@@ -1,12 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { bookmarkApi } from '../services/api';
 
+const SCROLL_DELAY_AFTER_COPY_MS = 600;
+const PROMPT_COPIED_DURATION_MS = 2000;
+
 export default function Tagging() {
   const navigate = useNavigate();
+  const promptSectionRef = useRef<HTMLDivElement>(null);
+  const pasteResponseSectionRef = useRef<HTMLDivElement>(null);
+  const scrollToPromptAfterGenerateRef = useRef(false);
+
   const [prompt, setPrompt] = useState<string>('');
   const [bookmarkCount, setBookmarkCount] = useState<number>(0);
-  const [remainingCount, setRemainingCount] = useState<number>(0);
   const [totalUntaggedCount, setTotalUntaggedCount] = useState<number>(0);
   const [totalBookmarkCount, setTotalBookmarkCount] = useState<number>(0);
   const [llmResponse, setLlmResponse] = useState<string>('');
@@ -16,6 +22,7 @@ export default function Tagging() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [limit, setLimit] = useState<number>(20);
+  const [promptJustCopied, setPromptJustCopied] = useState(false);
 
   // Load stats on component mount
   useEffect(() => {
@@ -36,6 +43,16 @@ export default function Tagging() {
     loadStats();
   }, []);
 
+  // After prompt is updated in the DOM (e.g. after Generate Prompt), scroll to it smoothly
+  useEffect(() => {
+    if (prompt && scrollToPromptAfterGenerateRef.current) {
+      scrollToPromptAfterGenerateRef.current = false;
+      // scroll just above promptSectionRef.current
+      window.scrollTo({ top: (promptSectionRef.current?.offsetTop ?? 0) - 100, behavior: 'smooth' });
+      // promptSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [prompt]);
+
   const handleGeneratePrompt = async () => {
     try {
       setIsGenerating(true);
@@ -54,13 +71,12 @@ export default function Tagging() {
         setError('No untagged bookmarks found to process. All bookmarks have been reviewed.');
         setPrompt('');
         setBookmarkCount(0);
-        setRemainingCount(result.remainingCount);
         return;
       }
 
+      scrollToPromptAfterGenerateRef.current = true;
       setPrompt(result.prompt);
       setBookmarkCount(result.bookmarkCount);
-      setRemainingCount(result.remainingCount);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate prompt');
     } finally {
@@ -71,10 +87,13 @@ export default function Tagging() {
   const handleCopyPrompt = async () => {
     try {
       await navigator.clipboard.writeText(prompt);
-      setSuccess('Prompt copied to clipboard!');
-      setTimeout(() => setSuccess(null), 2000);
+      setPromptJustCopied(true);
+      setTimeout(() => setPromptJustCopied(false), PROMPT_COPIED_DURATION_MS);
+      setTimeout(() => {
+        pasteResponseSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, SCROLL_DELAY_AFTER_COPY_MS);
     } catch (err) {
-      setError('Failed to copy prompt to clipboard');
+      setError(err instanceof Error ? err.message : 'Failed to copy prompt to clipboard');
     }
   };
 
@@ -117,6 +136,7 @@ export default function Tagging() {
       setError(err instanceof Error ? err.message : 'Failed to apply tags');
     } finally {
       setIsApplying(false);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
@@ -215,16 +235,16 @@ export default function Tagging() {
           </button>
 
           {prompt && (
-            <div className="mt-6">
+            <div ref={promptSectionRef} className="mt-6">
               <div className="flex items-center justify-between mb-2">
                 <label className="block text-sm font-medium text-gray-700">
                   Generated Prompt ({bookmarkCount} bookmark{bookmarkCount !== 1 ? 's' : ''}, {prompt.length.toLocaleString()} characters)
                 </label>
                 <button
                   onClick={handleCopyPrompt}
-                  className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                  className="text-sm text-blue-600 hover:text-blue-800 font-medium min-w-[120px]"
                 >
-                  📋 Copy Prompt
+                  {promptJustCopied ? '✓ Prompt Copied' : '📋 Copy Prompt'}
                 </button>
               </div>
               <textarea
@@ -240,7 +260,7 @@ export default function Tagging() {
         </div>
 
         {/* Step 2: Paste Response */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+        <div ref={pasteResponseSectionRef} className="bg-white rounded-lg shadow-md p-6 mb-6">
           <h2 className="text-xl font-bold text-gray-900 mb-4">Step 2: Paste LLM Response</h2>
           
           <p className="text-sm text-gray-600 mb-4">

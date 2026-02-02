@@ -9,7 +9,7 @@ import { prisma } from '../db/prismaClient';
 import { logger } from '../utils/logger';
 import {
   findTagsByKeywords,
-  getAllTagDefinitions,
+  getAllDefaultTagDefinitions,
   getTagDefinitionBySlug,
 } from './tagCategorization';
 
@@ -123,62 +123,45 @@ export async function getOrCreateTag(
 }
 
 /**
- * Initialize default tags in the database
- * Should be called on first run or after migration
+ * Initialize default tags in the database (only creates missing; never updates existing).
+ * Uses one query to determine which default tags don't exist, then createMany for any missing.
  */
 export async function initializeDefaultTags() {
   try {
-    const tagDefinitions = getAllTagDefinitions();
-    const createdTags: string[] = [];
-    const existingTags: string[] = [];
-
-    for (const tagDef of tagDefinitions) {
-      try {
-        const existing = await prisma.tag.findUnique({
-          where: { slug: tagDef.slug },
-        });
-
-        if (existing) {
-          // Update description and color if tag definition has them
-          if (tagDef.description || tagDef.color) {
-            await prisma.tag.update({
-              where: { id: existing.id },
-              data: {
-                ...(tagDef.description && { description: tagDef.description }),
-                ...(tagDef.color && { color: tagDef.color }),
-              },
-            });
-          }
-          existingTags.push(tagDef.name);
-        } else {
-          await getOrCreateTag(
-            tagDef.name,
-            tagDef.slug,
-            tagDef.description,
-            tagDef.color
-          );
-          createdTags.push(tagDef.name);
-        }
-      } catch (error) {
-        logger.error('Error initializing tag', {
-          error,
-          tagName: tagDef.name,
-          tagSlug: tagDef.slug,
-        });
-      }
+    const existingTags = await prisma.tag.findMany();
+    if (existingTags.length > 0) {
+      logger.info('Tag initialization completed', { created: 0, existing: existingTags.length });
+      return {
+        created: 0,
+        existing: existingTags.length,
+        createdTags: [],
+        existingTags: existingTags.map((t) => t.name),
+      };
     }
 
+    const toCreate = getAllDefaultTagDefinitions();
+
+    await prisma.tag.createMany({
+      data: toCreate.map((def) => ({
+        name: def.name,
+        slug: def.slug,
+        description: def.description ?? null,
+        color: def.color ?? null,
+      })),
+    });
+
+    const createdNames = toCreate.map((d) => d.name);
     logger.info('Tag initialization completed', {
-      created: createdTags.length,
+      created: toCreate.length,
       existing: existingTags.length,
-      createdTags,
+      createdTags: createdNames,
     });
 
     return {
-      created: createdTags.length,
+      created: toCreate.length,
       existing: existingTags.length,
-      createdTags,
-      existingTags,
+      createdTags: createdNames,
+      existingTags: existingTags.map((t) => t.name),
     };
   } catch (error) {
     logger.error('Error initializing default tags', error);

@@ -4,7 +4,6 @@
  * Generates prompts for LLM-based tag categorization
  */
 
-import { getAllTagDefinitions } from './tagCategorization';
 import { prisma } from '../db/prismaClient';
 import { logger } from '../utils/logger';
 
@@ -89,8 +88,11 @@ export async function generateTaggingPrompt(
   bookmarkLimit: number = 20
 ): Promise<TaggingPromptResult> {
   try {
-    // Get available tags
-    const tagDefinitions = getAllTagDefinitions();
+    // Get all tags from the database (not just defaults)
+    const tagsFromDb = await prisma.tag.findMany({
+      select: { slug: true, name: true, description: true },
+      orderBy: { slug: 'asc' },
+    });
 
     // Get untagged bookmarks
     const bookmarks = await getUntaggedBookmarks(bookmarkLimit);
@@ -104,9 +106,9 @@ export async function generateTaggingPrompt(
     const totalBookmarks = await getTotalBookmarkCount();
     const remainingCount = totalUntagged - bookmarks.length;
 
-    // Build the prompt with structured JSON format
+    // Build the prompt with structured JSON format (use current DB tags)
     const availableTagsJson = JSON.stringify(
-      tagDefinitions.map(tag => ({
+      tagsFromDb.map((tag) => ({
         slug: tag.slug,
         description: tag.description || tag.name,
       })),
@@ -164,7 +166,7 @@ Now analyze the bookmarks and provide your response:`;
       remainingCount,
       totalUntagged: totalUntagged,
       totalBookmarks,
-      tagCount: tagDefinitions.length,
+      tagCount: tagsFromDb.length,
     });
 
     return {
