@@ -11,8 +11,7 @@ interface SaveItem {
 }
 
 interface PostMessageData {
-  t: string;
-  p?: string;
+  itemsToSave: SaveItem[];
 }
 
 export default function Save() {
@@ -35,7 +34,7 @@ export default function Save() {
       const result = await bookmarkApi.checkDuplicates(itemsToCheck);
       setDuplicateIndices(new Set(result.duplicateIndices));
       setChangedIndices(new Set(result.changedIndices));
-      
+
       if (result.duplicateIndices.length > 0 || result.changedIndices.length > 0) {
         console.log(`Found ${result.duplicateIndices.length} duplicate(s) and ${result.changedIndices.length} changed item(s)`, result);
       }
@@ -58,38 +57,28 @@ export default function Save() {
       const data = event.data as PostMessageData;
       console.log('Received message:', data);
 
-      // Only process messages with the expected type
-      if (data.t !== 'XBM') {
-        return;
-      }
-
       try {
         // Parse the payload
-        if (!data.p) {
-          setError('Received XBM message but no payload found');
+        if (!data.itemsToSave || data.itemsToSave.length === 0) {
+          setError('Received message but no itemsToSave found');
           return;
         }
 
-        const parsed = JSON.parse(data.p);
-        
-        // Ensure it's an array
-        const itemsArray = Array.isArray(parsed) ? parsed : [parsed];
-        
         // Validate items have required fields
-        const validItems = itemsArray.filter((item: any) => item && (item.url || item.text));
-        
+        const validItems = data.itemsToSave.filter((item: SaveItem) => item && (item.url || item.text));
+
         if (validItems.length === 0) {
           setError('No valid items found. Items must have at least a "url" or "text" field.');
           return;
         }
-        
+
         setItems(validItems);
         setError(null);
         setDuplicateIndices(new Set()); // Reset duplicate indices
         setChangedIndices(new Set()); // Reset changed indices
-        
-        console.log('Received X bookmarks:', validItems);
-        
+
+        console.log('Received bookmarks:', validItems);
+
         // Check for duplicates after receiving items
         checkForDuplicates(validItems);
       } catch (err) {
@@ -118,7 +107,7 @@ export default function Save() {
   const handleSaveAll = async () => {
     // Save new items and changed items (exclude true duplicates)
     const itemsToSave = items.filter((_, index) => !duplicateIndices.has(index));
-    
+
     if (itemsToSave.length === 0) return;
 
     setIsSaving(true);
@@ -217,7 +206,7 @@ export default function Save() {
               </button>
             )}
           </div>
-          
+
           {items.length === 0 ? (
             <div className="space-y-6">
               <div className="text-center py-4">
@@ -232,14 +221,13 @@ export default function Save() {
                 <p className="text-sm text-gray-400 mb-2">Expected message format:</p>
                 <pre className="bg-gray-100 px-4 py-2 rounded text-xs text-left overflow-auto">
 {`window.postMessage({
-  t: "XBM",
-  p: JSON.stringify([{
-    platform: "x",
+  itemsToSave: [{
+    platform: "x", // "x", "reddit", "linkedin", etc
     url: "https://x.com/...",
     text: "...",
     author: "@username",
     timestamp: "2025-01-01T00:00:00.000Z"
-  }])
+  }]
 }, "*");`}
                 </pre>
                 <p className="text-xs text-gray-500 mt-2">
@@ -319,7 +307,7 @@ export default function Save() {
                             </span>
                           )}
                         </div>
-                        
+        
                         {item.url && (
                           <a
                             href={item.url}
@@ -330,7 +318,7 @@ export default function Save() {
                             {item.url}
                           </a>
                         )}
-                        
+        
                         {item.text && (
                           <p className="text-gray-700 text-sm line-clamp-3">{item.text}</p>
                         )}

@@ -134,11 +134,10 @@ const __VERSION__ = 'v1.0.0';
       alert("Popup blocked");
       return;
     }
-    const payloadJson = JSON.stringify(extractedBookmarks);
 
     const postRequest = () => {
       setTimeout(() => {
-        destinationWindow.postMessage({ t: "XBM", p: payloadJson }, "*");
+        destinationWindow.postMessage({ itemsToSave: extractedBookmarks }, "*");
         sentBookmarksCount += extractedBookmarks.length;
         // reset extracted
         extractedBookmarks.length = 0;
