@@ -3,14 +3,40 @@
 const __VERSION__ = 'v1.0.1';
 
 (() => {
-  const LOCAL_BOOKMARKS_SAVE_URL = 'http://localhost:3000/save';
+  // ------ CONFIG ------
+
+  const LOCAL_SAVE_BOOKMARKS_URL = 'http://localhost:3000/save';
+  const CURRENTLY_DISPLAYED_ITEMS_SELECTOR = 'shreddit-post, shreddit-profile-comment';
+  const ITEMS_WRAPPER_SELECTOR = 'shreddit-feed';
+  const ITEMS_WRAPPER_OBSERVER_CONFIG = {
+    childList: true,
+    subtree: true,
+  };
+
+  // ------ STATE (DO NOT MODIFY) ------
 
   const processedItemIds = new Set();
-  const extractedItems = [];
-  let sentItemsCount = 0;
+  const pendingNewBookmarks = [];
+  let sentBookmarksCount = 0;
 
-  const isSavedPage = () =>
-    /^https:\/\/(www\.)?reddit\.com\/user\/[^/]+\/saved/.test(location.href);
+  // ------ CUSTOM FUNCTIONS & LOGIC FOR THIS PLATFORM ------
+
+  /** Get stable unique item ID from permalink (subreddit + post id + comment id). */
+  const getItemId = (item) => {
+    const url = getItemUrl(item);
+    if (!url) return null;
+    // https://www.reddit.com/r/<subreddit>/comments/<post-id>/<post-title>/
+    // or https://www.reddit.com/r/<subreddit>/comments/<post-id>/<post-title>/comment/<comment-id>/
+    // or https://www.reddit.com/r/<subreddit>/comments/<post-id>/comment/<comment-id>/
+    const match = url.match(/^https?:\/\/(?:www\.)?reddit\.com\/r\/([^/]+)\/comments\/([^/]+)(?:\/[^/]+)?(?:\/comment\/([^/?#]+))?\/?(?:[?#].*)?$/i);
+    const [, subreddit, postId, commentId] = match || [];
+    return `${subreddit}-${postId}${commentId ? `-${commentId}` : ''}`;
+  };
+
+  const getItemUrl = (item) => {
+    const url = item.getAttribute(item.matches('shreddit-post') ? 'permalink' : 'href')?.split('?')[0] ?? null;
+    return ensureRedditPrefix(url);
+  };
 
   const ensureRedditPrefix = (url) => {
     if (!url) return null;
@@ -23,6 +49,70 @@ const __VERSION__ = 'v1.0.1';
     const parts = url.split('/').slice(3, 5);
     return parts.length === 2 ? parts.join('/') : null;
   };
+
+  /** Extract item data from shreddit-post element. */
+  const extractFromShredditPost = (item) => {
+    const itemUrl = getItemUrl(item);
+    const subreddit = extractSubredditFromUrl(itemUrl);
+    const author = item.getAttribute('author');
+    const timestamp = item.getAttribute('created-timestamp');
+
+    const postTitle = item.querySelector('a[slot="title"]')?.textContent.trim();
+    const postBodyEl = item.querySelector('[slot="text-body"] > a');
+    const postBodyMarkdown = (postBodyEl ? htmlToMarkdown(postBodyEl) : null);
+    if (!postTitle && !postBodyMarkdown) return null;
+
+    const content = `subreddit: ${subreddit}` + 
+      (postTitle ? `\n# ${postTitle}` : '') + 
+      (postBodyMarkdown ? `\n${postBodyMarkdown}` : '');
+
+    return {
+      platform: 'reddit',
+      url: itemUrl,
+      author: author || undefined,
+      text: content || undefined,
+      timestamp: timestamp || undefined,
+    };
+  };
+
+  /** Extract item data from shreddit-profile-comment element. */
+  const extractFromShredditComment = (item) => {
+    const itemUrl = getItemUrl(item);
+    const subreddit = extractSubredditFromUrl(itemUrl);
+    const author = item.querySelector('faceplate-hovercard[data-id="user-hover-card"] > a:first-child')?.textContent.trim();
+    const timestamp = item.querySelector('faceplate-timeago > time')?.getAttribute('datetime');
+
+    const parentPostTitle = item.querySelector('h2 > a')?.textContent.trim();
+    const commentBodyEl = item.querySelector('div[id="-post-rtjson-content"]');
+    const commentBodyMarkdown = (commentBodyEl ? htmlToMarkdown(commentBodyEl) : null);
+    if (!commentBodyMarkdown) return null;
+
+    const content = `subreddit: ${subreddit}` + 
+      (parentPostTitle ? `\nOriginal post title: ${parentPostTitle}` : '') + 
+      (commentBodyMarkdown ? `\nComment:\n---\n${commentBodyMarkdown}` : '');
+
+    return {
+      platform: 'reddit',
+      url: itemUrl,
+      author: author || undefined,
+      text: content || undefined,
+      timestamp: timestamp || undefined,
+    };
+  };
+
+  /** Build bookmark object from post/comment DOM, or null if invalid. */
+  const extractBookmarkFromItem = async (item) => {
+    if (item.matches('shreddit-post')) {
+      return extractFromShredditPost(item);
+    } else if (item.matches('shreddit-profile-comment')) {
+      return extractFromShredditComment(item);
+    }
+    return null;
+  };
+
+  /*********** DO NOT MODIFY BELOW THIS LINE ***********/
+
+  // ------ UTILITY FUNCTIONS (DO NOT MODIFY) ------
 
   const waitForElement = (selector, callback, maxWait = 10000) => {
     let elapsedTime = 0;
@@ -45,57 +135,62 @@ const __VERSION__ = 'v1.0.1';
       if (node.nodeType === Node.TEXT_NODE) {
         return node.textContent;
       }
-  
+
       if (node.nodeType !== Node.ELEMENT_NODE) {
         return '';
       }
-  
+
       const tag = node.tagName.toLowerCase();
       const content = Array.from(node.childNodes).map(processNode).join('');
-  
+
       switch (tag) {
-        case 'h1': return `# ${content}\n\n`;
-        case 'h2': return `## ${content}\n\n`;
-        case 'h3': return `### ${content}\n\n`;
-        case 'h4': return `#### ${content}\n\n`;
-        case 'h5': return `##### ${content}\n\n`;
-        case 'h6': return `###### ${content}\n\n`;
-  
-        case 'p': return `${content}\n\n`;
-        case 'br': return `  \n`;
-  
+        case 'h1': return `# ${content.trim()}\n\n`;
+        case 'h2': return `## ${content.trim()}\n\n`;
+        case 'h3': return `### ${content.trim()}\n\n`;
+        case 'h4': return `#### ${content.trim()}\n\n`;
+        case 'h5': return `##### ${content.trim()}\n\n`;
+        case 'h6': return `###### ${content.trim()}\n\n`;
+
+        case 'p': return `${content.trim()}\n\n`;
+        case 'br': return `\n`;
+
         case 'strong':
-        case 'b': return `**${content}**`;
-  
+        case 'b': return `**${content.trim()}**`;
+
         case 'em':
-        case 'i': return `*${content}*`;
-  
-        case 'code': return `\`${content}\``;
-  
-        case 'pre': return `\n\`\`\`\n${node.textContent}\n\`\`\`\n\n`;
-  
+        case 'i': return `*${content.trim()}*`;
+
+        case 'code': return `\`${content.trim()}\``;
+
+        case 'pre': return `\n\`\`\`\n${node.textContent.trim()}\n\`\`\`\n\n`;
+
         case 'a':
-          const href = node.getAttribute('href') || '';
-          return `[${content}](${href})`;
-  
+          const href = node.getAttribute('href')?.trim() || '';
+          const linkText = content.trim();
+          if (!linkText || !href) return '';
+          return `[${linkText}](${href})`;
+
         case 'ul':
           return '\n' + Array.from(node.children)
             .map(li => `- ${processNode(li).trim()}`)
             .join('\n') + '\n\n';
-  
+
         case 'ol':
           return '\n' + Array.from(node.children)
             .map((li, i) => `${i + 1}. ${processNode(li).trim()}`)
             .join('\n') + '\n\n';
-  
+
         case 'li':
           return content;
-  
+
+        case 'button':
+          return '';
+
         default:
           return content;
       }
     };
-  
+
     return Array.from(wrapperEl.childNodes)
       .map(processNode)
       .join('')
@@ -105,116 +200,68 @@ const __VERSION__ = 'v1.0.1';
       .replace(/\n{3,}/g, '\n\n') // max 2 newlines
   };
 
-  /** Get stable unique item ID from permalink (subreddit + post id + comment id). */
-  const getUniqueItemIdFromUrl = (url) => {
-    if (!url) return null;
-    // https://www.reddit.com/r/<subreddit>/comments/<post-id>/<post-title>/
-    // or https://www.reddit.com/r/<subreddit>/comments/<post-id>/<post-title>/comment/<comment-id>/
-    // or https://www.reddit.com/r/<subreddit>/comments/<post-id>/comment/<comment-id>/
-    const match = url.match(/^https?:\/\/(?:www\.)?reddit\.com\/r\/([^/]+)\/comments\/([^/]+)(?:\/[^/]+)?(?:\/comment\/([^/?#]+))?\/?(?:[?#].*)?$/i);
-    const [, subreddit, postId, commentId] = match || [];
-    return `${subreddit}-${postId}${commentId ? `-${commentId}` : ''}`;
+  // ------ ITEM PROCESSING FUNCTIONS (DO NOT MODIFY) ------
+
+  /** Add visual outline to indicate item was successfully processed. */
+  const addItemProcessedOutline = (item) => {
+    item.style.outline = '2px solid #1d9bf0';
+    item.style.outlineOffset = '2px';
   };
 
-  /** Extract item data from shreddit-post element. */
-  const extractFromShredditPost = (postEl) => {
-    const postTitleLinkEl = postEl.querySelector('a[slot="title"]');
-    if (!postTitleLinkEl) return null;
-
-    const itemUrl = ensureRedditPrefix(postTitleLinkEl.href.split('?')[0]);
-    const subreddit = extractSubredditFromUrl(itemUrl);
-    const postTitle = postTitleLinkEl.textContent.trim();
-    const postBodyEl = postEl.querySelector('[slot="text-body"] > a');
-    const content = `subreddit: ${subreddit}\n# ${postTitle}` + (postBodyEl ? `\n${htmlToMarkdown(postBodyEl)}` : '');
-
-    const author = postEl.getAttribute('author');
-    const timestamp = postEl.getAttribute('created-timestamp');
-
-    return {
-      platform: 'reddit',
-      url: itemUrl,
-      author: author || undefined,
-      text: content || undefined,
-      timestamp: timestamp || undefined,
-    };
+  /** Add visual outline to indicate item was unable to be processed. */
+  const addItemErrorOutline = (item) => {
+    item.style.outline = '2px solid #ff0000';
+    item.style.outlineOffset = '2px';
   };
 
-  /** Extract item data from shreddit-profile-comment element. */
-  const extractFromShredditComment = (commentEl) => {
-    const itemUrl = ensureRedditPrefix(commentEl.getAttribute('href')?.split('?')[0])
-    const subreddit = extractSubredditFromUrl(itemUrl);
-    const parentPostTitle = commentEl.querySelector('h2 > a')?.textContent.trim();
-
-    const commentBodyEl = commentEl.querySelector('div[id="-post-rtjson-content"]');
-    const commentBodyMarkdown = (commentBodyEl ? htmlToMarkdown(commentBodyEl) : null) || undefined;
-    if (!commentBodyMarkdown) return null;
-
-    const content = `subreddit: ${subreddit}\nOriginal post title: ${parentPostTitle}\nComment:\n---\n${commentBodyMarkdown}`;
-
-    const author = commentEl.querySelector('faceplate-hovercard[data-id="user-hover-card"] > a:first-child')?.textContent.trim();
-    const timestamp = commentEl.querySelector('faceplate-timeago > time')?.getAttribute('datetime');
-
-    return {
-      platform: 'reddit',
-      url: itemUrl,
-      author: author || undefined,
-      text: content || undefined,
-      timestamp: timestamp || undefined,
-    };
-  };
-
-  /** Add visual outline for processed item. */
-  const addItemProcessedOutline = (el) => {
-    el.style.outline = '2px solid #1d9bf0';
-    el.style.outlineOffset = '2px';
-  };
-
-  /** Add visual outline for error. */
-  const addItemErrorOutline = (el) => {
-    el.style.outline = '2px solid #ff0000';
-    el.style.outlineOffset = '2px';
-  };
-
-  /** Process one post/comment item: extract data, mark processed. Returns item or null. */
-  const processSingleItem = (itemEl) => {
-    const itemData = (() => {
-      if (itemEl.matches('shreddit-post')) {
-        return extractFromShredditPost(itemEl);
-      } else if (itemEl.matches('shreddit-profile-comment')) {
-        return extractFromShredditComment(itemEl);
-      }
-      return null;
-    })();
-    if (!itemData) {
-      addItemErrorOutline(itemEl);
-      return null;
-    }
-
-    const itemId = getUniqueItemIdFromUrl(itemData.url);
+  /** Process one item: extract data if new/unsent, mark processed. Returns bookmark or null. */
+  const processItemAndExtractBookmarkIfNew = async (item) => {
+    const itemId = getItemId(item);
     if (!itemId) {
-      addItemErrorOutline(itemEl);
-      return null;
+      addItemErrorOutline(item);
+      return;
     }
     if (processedItemIds.has(itemId)) {
-      addItemProcessedOutline(itemEl);
-      return null;
+      addItemProcessedOutline(item);
+      return;
     }
 
-    processedItemIds.add(itemId);
-    addItemProcessedOutline(itemEl);
-    return itemData;
+    try {
+      const bookmark = await extractBookmarkFromItem(item);
+      if (!bookmark) {
+        addItemErrorOutline(item);
+        return;
+      }
+      if (processedItemIds.has(itemId)) {
+        // race condition, but should be rare
+        addItemProcessedOutline(item);
+        return;
+      }
+      processedItemIds.add(itemId);
+      addItemProcessedOutline(item);
+      return bookmark;
+    } catch {
+      addItemErrorOutline(item);
+      return;
+    }
   };
 
-  /** Process all visible posts/comments; returns array of item objects. */
-  const processAllItems = () => {
-    const postsAndComments = Array.from(document.querySelectorAll('shreddit-post, shreddit-profile-comment'));
-    const results = postsAndComments.map((el) => processSingleItem(el));
-    return results.filter(Boolean);
+  /** Process all visible items and extract any new bookmarks. */
+  const processCurrentlyDisplayedItems = async () => {
+    const items = Array.from(document.querySelectorAll(CURRENTLY_DISPLAYED_ITEMS_SELECTOR));
+    const newBookmarks = (
+      await Promise.all(items.map((item) => processItemAndExtractBookmarkIfNew(item)))
+    ).filter(Boolean);
+    if (newBookmarks.length === 0) {
+      return;
+    }
+    pendingNewBookmarks.push(...newBookmarks);
+    updateBookmarksStatusDisplay();
   };
 
-  /** Open save page and post payload. */
-  const sendItemsToSavePage = () => {
-    const destinationWindow = window.open(LOCAL_BOOKMARKS_SAVE_URL, '_blank');
+  /** Open save page and post payload with retries. */
+  const sendUnsentBookmarksToSavePage = () => {
+    const destinationWindow = window.open(LOCAL_SAVE_BOOKMARKS_URL, '_blank');
     if (!destinationWindow) {
       alert('Popup blocked');
       return;
@@ -222,10 +269,11 @@ const __VERSION__ = 'v1.0.1';
 
     const postRequest = () => {
       setTimeout(() => {
-        destinationWindow.postMessage({ itemsToSave: extractedItems }, '*');
-        sentItemsCount += extractedItems.length;
-        extractedItems.length = 0;
-        updateExtractedStatusDisplay();
+        destinationWindow.postMessage({ bookmarksToSave: pendingNewBookmarks }, '*');
+        sentBookmarksCount += pendingNewBookmarks.length;
+        // reset pending
+        pendingNewBookmarks.length = 0;
+        updateBookmarksStatusDisplay();
       }, 200);
     };
 
@@ -236,19 +284,13 @@ const __VERSION__ = 'v1.0.1';
     }
   };
 
-  const processCurrentlyDisplayedItems = () => {
-    const newExtractedItems = processAllItems();
-    if (!newExtractedItems.length) return;
-    extractedItems.push(...newExtractedItems);
-    updateExtractedStatusDisplay();
-  };
-
   const getOrCreateCustomActionsWrapper = () => {
-    let wrapper = document.getElementById('customActions-wrapper-reddit');
+    let wrapper = document.getElementById('customActions-wrapper');
     if (wrapper) return wrapper;
 
+    // Create a wrapper for any buttons and version display
     wrapper = document.createElement('div');
-    wrapper.id = 'customActions-wrapper-reddit';
+    wrapper.id = 'customActions-wrapper';
     Object.assign(wrapper.style, {
       position: 'fixed',
       right: '86px',
@@ -266,43 +308,40 @@ const __VERSION__ = 'v1.0.1';
     return wrapper;
   };
 
-  const setupFeedMutationObserver = (callback) => {
-    waitForElement('shreddit-feed', (feedEl) => {
+  const setupItemsWrapperMutationObserver = (callback) => {
+    waitForElement(ITEMS_WRAPPER_SELECTOR, (itemsWrapperEl) => {
       const observer = new MutationObserver(callback);
-      observer.observe(feedEl, {
-        childList: true,
-        subtree: true,
-      });
+      observer.observe(itemsWrapperEl, ITEMS_WRAPPER_OBSERVER_CONFIG);
+      return observer;
     });
   };
 
-  const setupExtractedStatusDisplay = () => {
-    const extractedStatusDiv = document.createElement('div');
-    extractedStatusDiv.id = 'extractedStatusReddit';
-    Object.assign(extractedStatusDiv.style, {
+  const setupBookmarksStatusDisplay = () => {
+    const bookmarksStatusDiv = document.createElement('div');
+    bookmarksStatusDiv.id = 'bookmarksStatus';
+    Object.assign(bookmarksStatusDiv.style, {
       fontSize: '10px',
       color: '#333',
-      textAlign: 'right',
+      textAlign: 'right'
     });
-    extractedStatusDiv.innerHTML = 'Extracted + unsent: <span></span><br />Sent: <span></span>';
-    getOrCreateCustomActionsWrapper().appendChild(extractedStatusDiv);
-    extractedStatusDiv.querySelector('span:first-child').addEventListener('click', () => {
-      console.log('extractedItems', extractedItems);
+    bookmarksStatusDiv.innerHTML = 'Pending new: <span></span><br />Sent: <span></span>';
+    getOrCreateCustomActionsWrapper().appendChild(bookmarksStatusDiv);
+    bookmarksStatusDiv.querySelector('span:first-child').addEventListener('click', () => {
+      console.log('pendingNewBookmarks', pendingNewBookmarks);
     });
-
-    updateExtractedStatusDisplay();
+    updateBookmarksStatusDisplay();
   };
 
-  const updateExtractedStatusDisplay = () => {
-    const extractedStatusDiv = document.querySelector('#extractedStatusReddit');
-    if (extractedStatusDiv) {
-      const [extractedCountSpan, sentCountSpan] = Array.from(extractedStatusDiv.querySelectorAll('span'));
-      extractedCountSpan.textContent = extractedItems.length;
-      sentCountSpan.textContent = sentItemsCount;
+  const updateBookmarksStatusDisplay = () => {
+    const bookmarksStatusDiv = document.querySelector('#bookmarksStatus');
+    if (bookmarksStatusDiv) {
+      const [pendingNewCountSpan, sentCountSpan] = Array.from(bookmarksStatusDiv.querySelectorAll('span'));
+      pendingNewCountSpan.textContent = pendingNewBookmarks.length;
+      sentCountSpan.textContent = sentBookmarksCount;
     }
   };
 
-  const setupProcessButton = () => {
+  const setupStartProcessingButton = () => {
     const processButton = document.createElement('button');
     processButton.id = 'processButton';
     Object.assign(processButton.style, {
@@ -320,7 +359,10 @@ const __VERSION__ = 'v1.0.1';
       processButton.textContent = 'Processing...';
       processButton.style.backgroundColor = '#f0f0f0';
       processButton.style.color = '#666';
-      setupFeedMutationObserver(() => processCurrentlyDisplayedItems());
+      setupItemsWrapperMutationObserver(() => {
+        processCurrentlyDisplayedItems();
+      });
+      // fire immediately for current content as observer only fires after DOM updates
       processCurrentlyDisplayedItems();
     });
     getOrCreateCustomActionsWrapper().appendChild(processButton);
@@ -338,7 +380,7 @@ const __VERSION__ = 'v1.0.1';
       cursor: 'pointer',
     });
     sendButton.textContent = 'Send';
-    sendButton.addEventListener('click', sendItemsToSavePage);
+    sendButton.addEventListener('click', sendUnsentBookmarksToSavePage);
     getOrCreateCustomActionsWrapper().appendChild(sendButton);
   };
 
@@ -357,18 +399,18 @@ const __VERSION__ = 'v1.0.1';
     setTimeout(() => {
       const processButton = document.getElementById('processButton');
       if (!processButton) return;
-      // initiate bookmark harvesting
+      // initiate bookmarks harvesting
       processButton.click();
       let pageDownRemaining = pageDownTarget;
-      // initiate page scrolling
+      // initiate page down scrolling
       const interval = setInterval(() => {
         window.scrollBy(0, window.innerHeight);
         pageDownRemaining--;
         if (pageDownRemaining <= 0) {
           clearInterval(interval);
-          // send extracted bookmarks to save page
+          // send unsent bookmarks to save page after scrolling
           setTimeout(() => {
-            sendItemsToSavePage();
+            sendUnsentBookmarksToSavePage();
           }, postScrollDelayMs);
           return;
         }
@@ -376,16 +418,14 @@ const __VERSION__ = 'v1.0.1';
     }, initialDelayMs);
   };
 
+  // ------ INITIALIZATION FUNCTIONS (DO NOT MODIFY) ------
+
   const init = () => {
-    if (!isSavedPage()) {
-      alert('Run on Reddit saved page: reddit.com/user/<username>/saved/');
-      return;
-    }
-    setupExtractedStatusDisplay();
-    setupProcessButton();
+    setupBookmarksStatusDisplay();
+    setupStartProcessingButton();
     setupSendButton();
     setupVersionDisplay();
-    updateExtractedStatusDisplay();
+    updateBookmarksStatusDisplay();
     if (window.location.search.includes('autosync=true')) {
       triggerAutoSync();
     }

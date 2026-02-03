@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { bookmarkApi } from '../services/api';
 
-interface SaveItem {
+interface SaveBookmark {
   platform: string;
   url: string;
   author?: string;
@@ -11,7 +11,7 @@ interface SaveItem {
 }
 
 interface PostMessageData {
-  itemsToSave: SaveItem[];
+  bookmarksToSave: SaveBookmark[];
 }
 
 /** Remove leading '@' from author string if present */
@@ -23,7 +23,7 @@ const normalizeAuthor = (author: string | undefined): string | undefined => {
 
 export default function Save() {
   const navigate = useNavigate();
-  const [items, setItems] = useState<SaveItem[]>([]);
+  const [bookmarks, setBookmarks] = useState<SaveBookmark[]>([]);
   const [duplicateIndices, setDuplicateIndices] = useState<Set<number>>(new Set());
   const [changedIndices, setChangedIndices] = useState<Set<number>>(new Set());
   const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false);
@@ -33,17 +33,17 @@ export default function Save() {
   const [isReady, setIsReady] = useState(false);
   const messageHandlerRef = useRef<((event: MessageEvent) => void) | null>(null);
 
-  const checkForDuplicates = async (itemsToCheck: SaveItem[]) => {
-    if (itemsToCheck.length === 0) return;
+  const checkForDuplicates = async (bookmarksToCheck: SaveBookmark[]) => {
+    if (bookmarksToCheck.length === 0) return;
 
     try {
       setIsCheckingDuplicates(true);
-      const result = await bookmarkApi.checkDuplicates(itemsToCheck);
+      const result = await bookmarkApi.checkDuplicates(bookmarksToCheck);
       setDuplicateIndices(new Set(result.duplicateIndices));
       setChangedIndices(new Set(result.changedIndices));
 
       if (result.duplicateIndices.length > 0 || result.changedIndices.length > 0) {
-        console.log(`Found ${result.duplicateIndices.length} duplicate(s) and ${result.changedIndices.length} changed item(s)`, result);
+        console.log(`Found ${result.duplicateIndices.length} duplicate(s) and ${result.changedIndices.length} changed bookmark(s)`, result);
       }
     } catch (err) {
       console.error('Error checking for duplicates:', err);
@@ -66,28 +66,28 @@ export default function Save() {
 
       try {
         // Parse the payload
-        if (!data.itemsToSave || data.itemsToSave.length === 0) {
-          setError('Received message but no itemsToSave found');
+        if (!data.bookmarksToSave || data.bookmarksToSave.length === 0) {
+          setError('Received message but no bookmarksToSave found');
           return;
         }
 
-        // Validate items have required fields
-        const validItems = data.itemsToSave.filter((item: SaveItem) => item && (item.url || item.text));
+        // Validate bookmarks have required fields
+        const validBookmarks = data.bookmarksToSave.filter((bookmark: SaveBookmark) => bookmark && (bookmark.url || bookmark.text));
 
-        if (validItems.length === 0) {
-          setError('No valid items found. Items must have at least a "url" or "text" field.');
+        if (validBookmarks.length === 0) {
+          setError('No valid bookmarks found. Bookmarks must have at least a "url" or "text" field.');
           return;
         }
 
-        setItems(validItems);
+        setBookmarks(validBookmarks);
         setError(null);
         setDuplicateIndices(new Set()); // Reset duplicate indices
         setChangedIndices(new Set()); // Reset changed indices
 
-        console.log('Received bookmarks:', validItems);
+        console.log('Received bookmarks:', validBookmarks);
 
-        // Check for duplicates after receiving items
-        checkForDuplicates(validItems);
+        // Check for duplicates after receiving bookmarks
+        checkForDuplicates(validBookmarks);
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to parse data';
         setError(`Error parsing save data: ${errorMessage}. Make sure the payload contains valid JSON.`);
@@ -112,29 +112,31 @@ export default function Save() {
   }, []);
 
   const handleSaveAll = async () => {
-    // Save new items and changed items (exclude true duplicates)
-    const itemsToSave = items
+    // Save new bookmarks and changed bookmarks (exclude true duplicates)
+    const bookmarksToSave = bookmarks
       .filter((_, index) => !duplicateIndices.has(index))
-      .map((item) => ({
-        ...item,
-        author: normalizeAuthor(item.author),
+      .map((bookmark) => ({
+        ...bookmark,
+        author: normalizeAuthor(bookmark.author),
       }));
 
-    if (itemsToSave.length === 0) return;
+    if (bookmarksToSave.length === 0) return;
 
     setIsSaving(true);
     setError(null);
     setSuccessMessage(null);
 
     try {
-      const result = await bookmarkApi.bulkSave(itemsToSave);
+      const result = await bookmarkApi.bulkSave(bookmarksToSave);
 
-      const newCount = items.length - duplicateIndices.size - changedIndices.size;
+      const newCount = bookmarks.length - duplicateIndices.size - changedIndices.size;
       const updatedCount = changedIndices.size;
 
       if (result.saved > 0) {
         setSuccessMessage(
-          `Successfully saved ${newCount} new bookmark${newCount > 1 ? 's' : ''}${updatedCount > 0 ? ` and updated ${updatedCount} existing bookmark${updatedCount > 1 ? 's' : ''}` : ''}${result.failed > 0 ? ` (${result.failed} failed)` : ''}`
+          `Successfully saved ${newCount} new bookmark${newCount > 1 ? 's' : ''}` + 
+          `${updatedCount > 0 ? ` and updated ${updatedCount} existing bookmark${updatedCount > 1 ? 's' : ''}` : ''}` + 
+          `${result.failed > 0 ? ` (${result.failed} failed)` : ''}`
         );
 
         // Redirect to dashboard after a short delay
@@ -142,7 +144,7 @@ export default function Save() {
           navigate('/');
         }, 2000);
       } else {
-        setError(`Failed to save all items. ${result.failed} item(s) failed.`);
+        setError(`Failed to save all bookmarks. ${result.failed} bookmark(s) failed.`);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save bookmarks');
@@ -151,10 +153,10 @@ export default function Save() {
     }
   };
 
-  const newItemsCount = items.length - duplicateIndices.size - changedIndices.size;
-  const changedItemsCount = changedIndices.size;
-  const duplicateItemsCount = duplicateIndices.size;
-  const itemsToSaveCount = newItemsCount + changedItemsCount;
+  const newBookmarksCount = bookmarks.length - duplicateIndices.size - changedIndices.size;
+  const changedBookmarksCount = changedIndices.size;
+  const duplicateBookmarksCount = duplicateIndices.size;
+  const bookmarksToSaveCount = newBookmarksCount + changedBookmarksCount;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -184,42 +186,42 @@ export default function Save() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-xl font-bold text-gray-900">
-                Items Received ({items.length})
+                Bookmarks Received ({bookmarks.length})
               </h2>
               <div className="flex items-center gap-4 mt-1 text-sm">
-                {newItemsCount > 0 && (
+                {newBookmarksCount > 0 && (
                   <span className="text-gray-600">
-                    <span className="font-semibold text-green-600">{newItemsCount}</span> new
+                    <span className="font-semibold text-green-600">{newBookmarksCount}</span> new
                   </span>
                 )}
-                {changedItemsCount > 0 && (
+                {changedBookmarksCount > 0 && (
                   <span className="text-blue-600">
-                    <span className="font-semibold">{changedItemsCount}</span> to update
+                    <span className="font-semibold">{changedBookmarksCount}</span> to update
                   </span>
                 )}
-                {duplicateItemsCount > 0 && (
+                {duplicateBookmarksCount > 0 && (
                   <span className="text-amber-600">
-                    <span className="font-semibold">{duplicateItemsCount}</span> duplicate{duplicateItemsCount > 1 ? 's' : ''}
+                    <span className="font-semibold">{duplicateBookmarksCount}</span> duplicate{duplicateBookmarksCount > 1 ? 's' : ''}
                   </span>
                 )}
               </div>
             </div>
-            {items.length > 0 && (
+            {bookmarks.length > 0 && (
               <button
                 onClick={handleSaveAll}
-                disabled={isSaving || itemsToSaveCount === 0}
+                disabled={isSaving || bookmarksToSaveCount === 0}
                 className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {isSaving
                   ? 'Saving...'
-                  : itemsToSaveCount > 0
-                  ? `Save ${newItemsCount > 0 ? `${newItemsCount} New${changedItemsCount > 0 ? ' + ' : ''}` : ''}${changedItemsCount > 0 ? `${changedItemsCount} Updated` : ''}`
-                  : 'No Items to Save'}
+                  : bookmarksToSaveCount > 0
+                  ? `Save ${newBookmarksCount > 0 ? `${newBookmarksCount} New${changedBookmarksCount > 0 ? ' + ' : ''}` : ''}${changedBookmarksCount > 0 ? `${changedBookmarksCount} Updated` : ''}`
+                  : 'No Bookmarks to Save'}
               </button>
             )}
           </div>
 
-          {items.length === 0 ? (
+          {bookmarks.length === 0 ? (
             <div className="space-y-6">
               <div className="text-center py-4">
                 <p className="text-gray-500 mb-2">
@@ -233,7 +235,7 @@ export default function Save() {
                 <p className="text-sm text-gray-400 mb-2">Expected message format:</p>
                 <pre className="bg-gray-100 px-4 py-2 rounded text-xs text-left overflow-auto">
 {`window.postMessage({
-  itemsToSave: [{
+  bookmarksToSave: [{
     platform: "x", // "x", "reddit", "linkedin", etc
     url: "https://x.com/...",
     text: "...",
@@ -254,7 +256,7 @@ export default function Save() {
                   Checking for duplicates and changes...
                 </div>
               )}
-              {items.map((item, index) => {
+              {bookmarks.map((bookmark, index) => {
                 const isDuplicate = duplicateIndices.has(index);
                 const isChanged = changedIndices.has(index);
                 return (
@@ -272,7 +274,7 @@ export default function Save() {
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-2 flex-wrap">
                           <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-semibold rounded">
-                            {item.platform.toUpperCase()}
+                            {bookmark.platform.toUpperCase()}
                           </span>
                           {isDuplicate && (
                             <span className="px-2 py-1 bg-amber-200 text-amber-800 text-xs font-semibold rounded flex items-center gap-1">
@@ -310,29 +312,29 @@ export default function Save() {
                               Updated
                             </span>
                           )}
-                          {item.author && (
-                            <span className="text-sm text-gray-600">@{item.author}</span>
+                          {bookmark.author && (
+                            <span className="text-sm text-gray-600">@{bookmark.author}</span>
                           )}
-                          {item.timestamp && (
+                          {bookmark.timestamp && (
                             <span className="text-xs text-gray-400">
-                              {new Date(item.timestamp).toLocaleDateString()}
+                              {new Date(bookmark.timestamp).toLocaleDateString()}
                             </span>
                           )}
                         </div>
         
-                        {item.url && (
+                        {bookmark.url && (
                           <a
-                            href={item.url}
+                            href={bookmark.url}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-blue-600 hover:text-blue-800 text-sm break-all block mb-2"
                           >
-                            {item.url}
+                            {bookmark.url}
                           </a>
                         )}
         
-                        {item.text && (
-                          <p className="text-gray-700 text-sm line-clamp-3">{item.text}</p>
+                        {bookmark.text && (
+                          <p className="text-gray-700 text-sm line-clamp-3">{bookmark.text}</p>
                         )}
                       </div>
                     </div>

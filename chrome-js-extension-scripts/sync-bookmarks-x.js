@@ -3,14 +3,78 @@
 const __VERSION__ = 'v1.0.1';
 
 (() => {
-  const LOCAL_BOOKMARKS_SAVE_URL = 'http://localhost:3000/save';
-  const SHOW_MORE_DELAY_MS = 100;
+  // ------ CONFIG ------
 
-  const processedArticleIds = new Set();
-  const extractedBookmarks = [];
+  const LOCAL_SAVE_BOOKMARKS_URL = 'http://localhost:3000/save';
+  const SHOW_MORE_DELAY_MS = 100;
+  const CURRENTLY_DISPLAYED_ITEMS_SELECTOR = 'article[role="article"]'
+  const ITEMS_WRAPPER_SELECTOR = '[aria-label="Timeline: Bookmarks"] > div';
+  const ITEMS_WRAPPER_OBSERVER_CONFIG = {
+    attributes: false,
+    childList: true,
+    subtree: false,
+    characterData: false,
+  };
+
+  // ------ STATE (DO NOT MODIFY) ------
+
+  const processedItemIds = new Set();
+  const pendingNewBookmarks = [];
   let sentBookmarksCount = 0;
 
-  const isBookmarksPage = () => /^https:\/\/x\.com\/i\/bookmarks/.test(location.href);
+  // ------ CUSTOM FUNCTIONS & LOGIC FOR THIS PLATFORM ------
+
+  const getItemId = (item) => {
+    return item.querySelector('time')?.parentElement?.href?.split('/').pop() || null;
+  };
+
+  /** Click "show more" if present and wait for DOM to update. */
+  const clickShowMoreAndWait = (item) => {
+    const showMoreLinkEl = item.querySelector('button[data-testid="tweet-text-show-more-link"]');
+    if (!showMoreLinkEl) return Promise.resolve();
+    showMoreLinkEl.click();
+    return new Promise((resolve) => setTimeout(resolve, SHOW_MORE_DELAY_MS));
+  };
+
+  /** Extract item content fromtweet text or article card. */
+  const getItemContent = (item) => {
+    const tweetTextEl = item.querySelector('[data-testid="tweetText"]');
+    if (tweetTextEl) return tweetTextEl.innerText.trim();
+
+    const articleLabelEl = item.querySelector('[aria-label="Article"]');
+    if (articleLabelEl) {
+      const container = articleLabelEl.closest('[data-testid="article-cover-image"]') || articleLabelEl.parentElement.parentElement;
+      return (container?.parentElement?.innerText ?? '').replace(/^\s*article\s*/i, '#').trim();
+    }
+
+    return null;
+  };
+
+  /** Build bookmark object from item DOM, or null if invalid. */
+  const extractBookmarkFromItem = async (item) => {
+    await clickShowMoreAndWait(item);
+    const content = getItemContent(item);
+    if (!content) return null;
+
+    const statusLinkEl = item.querySelector('a[href*="/status/"]');
+    if (!statusLinkEl) return null;
+
+    const bookmarkUrl = statusLinkEl.href.split('?')[0];
+    const authorLinkEl = item.querySelector('a[href^="/"][role="link"]');
+    const timeEl = item.querySelector('time');
+
+    return {
+      platform: 'x',
+      url: bookmarkUrl,
+      author: authorLinkEl ? '@' + authorLinkEl.getAttribute('href').slice(1) : null,
+      text: content,
+      timestamp: timeEl ? timeEl.getAttribute('datetime') : null
+    };
+  };
+
+  /*********** DO NOT MODIFY BELOW THIS LINE ***********/
+
+  // ------ UTILITY FUNCTIONS (DO NOT MODIFY) ------
 
   const waitForElement = (selector, callback, maxWait = 10000) => {
     let elapsedTime = 0;
@@ -28,120 +92,150 @@ const __VERSION__ = 'v1.0.1';
     }, 100);
   };
 
-  const getArticleId = (article) => {
-    return article.querySelector("time")?.parentElement?.href?.split("/").pop() || null;
-  };
+  const htmlToMarkdown = (wrapperEl) => {
+    const processNode = (node) => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        return node.textContent;
+      }
 
-  /** Click "show more" if present and wait for DOM to update. */
-  const clickShowMoreAndWait = (article) => {
-    const showMoreLinkEl = article.querySelector('button[data-testid="tweet-text-show-more-link"]');
-    if (!showMoreLinkEl) return Promise.resolve();
-    showMoreLinkEl.click();
-    return new Promise((resolve) => setTimeout(resolve, SHOW_MORE_DELAY_MS));
-  };
+      if (node.nodeType !== Node.ELEMENT_NODE) {
+        return '';
+      }
 
-  /** Extract [type, content] from article (tweet text or article card). */
-  const getArticleTypeAndContent = (article) => {
-    const tweetTextEl = article.querySelector('[data-testid="tweetText"]');
-    if (tweetTextEl) return ['tweet', tweetTextEl.innerText.trim()];
+      const tag = node.tagName.toLowerCase();
+      const content = Array.from(node.childNodes).map(processNode).join('');
 
-    const articleLabelEl = article.querySelector('[aria-label="Article"]');
-    if (articleLabelEl) {
-      const container = articleLabelEl.closest('[data-testid="article-cover-image"]') || articleLabelEl.parentElement.parentElement;
-      const text = (container?.parentElement?.innerText ?? '').replace(/^\s*article\s*/i, "#").trim();
-      return ['article', text];
-    }
-    return [null, null];
-  };
+      switch (tag) {
+        case 'h1': return `# ${content.trim()}\n\n`;
+        case 'h2': return `## ${content.trim()}\n\n`;
+        case 'h3': return `### ${content.trim()}\n\n`;
+        case 'h4': return `#### ${content.trim()}\n\n`;
+        case 'h5': return `##### ${content.trim()}\n\n`;
+        case 'h6': return `###### ${content.trim()}\n\n`;
 
-  /** Build bookmark object from article DOM, or null if invalid. */
-  const extractBookmarkFromArticle = (article) => {
-    const [articleType, articleContent] = getArticleTypeAndContent(article);
-    if (!articleType || !articleContent) return null;
+        case 'p': return `${content.trim()}\n\n`;
+        case 'br': return `\n`;
 
-    const statusLinkEl = article.querySelector('a[href*="/status/"]');
-    if (!statusLinkEl) return null;
+        case 'strong':
+        case 'b': return `**${content.trim()}**`;
 
-    const bookmarkUrl = statusLinkEl.href.split("?")[0];
-    const authorLinkEl = article.querySelector('a[href^="/"][role="link"]');
-    const timeEl = article.querySelector("time");
+        case 'em':
+        case 'i': return `*${content.trim()}*`;
 
-    return {
-      platform: "x",
-      url: bookmarkUrl,
-      author: authorLinkEl ? "@" + authorLinkEl.getAttribute("href").slice(1) : null,
-      text: articleContent ?? '',
-      timestamp: timeEl ? timeEl.getAttribute("datetime") : null
+        case 'code': return `\`${content.trim()}\``;
+
+        case 'pre': return `\n\`\`\`\n${node.textContent.trim()}\n\`\`\`\n\n`;
+
+        case 'a':
+          const href = node.getAttribute('href')?.trim() || '';
+          const linkText = content.trim();
+          if (!linkText || !href) return '';
+          return `[${linkText}](${href})`;
+
+        case 'ul':
+          return '\n' + Array.from(node.children)
+            .map(li => `- ${processNode(li).trim()}`)
+            .join('\n') + '\n\n';
+
+        case 'ol':
+          return '\n' + Array.from(node.children)
+            .map((li, i) => `${i + 1}. ${processNode(li).trim()}`)
+            .join('\n') + '\n\n';
+
+        case 'li':
+          return content;
+
+        case 'button':
+          return '';
+
+        default:
+          return content;
+      }
     };
+
+    return Array.from(wrapperEl.childNodes)
+      .map(processNode)
+      .join('')
+      .trim()
+      .replace(/[ \t]+\n/g, '\n') // remove trailing spaces
+      .replace(/\n[ \t]+/g, '\n') // remove leading spaces
+      .replace(/\n{3,}/g, '\n\n') // max 2 newlines
   };
 
-  /** Add visual outline to indicate article has been processed. */
-  const addArticleProcessedOutline = (article) => {
-    article.style.outline = "2px solid #1d9bf0";
-    article.style.outlineOffset = "2px";
+  // ------ ITEM PROCESSING FUNCTIONS (DO NOT MODIFY) ------
+
+  /** Add visual outline to indicate item was successfully processed. */
+  const addItemProcessedOutline = (item) => {
+    item.style.outline = '2px solid #1d9bf0';
+    item.style.outlineOffset = '2px';
   };
 
-  /** Add visual outline to indicate article has been processed. */
-  const addArticleErrorOutline = (article) => {
-    article.style.outline = "2px solid #ff0000";
-    article.style.outlineOffset = "2px";
+  /** Add visual outline to indicate item was unable to be processed. */
+  const addItemErrorOutline = (item) => {
+    item.style.outline = '2px solid #ff0000';
+    item.style.outlineOffset = '2px';
   };
 
-  /** Process one article: expand "show more", extract data, mark processed. Returns bookmark or null. */
-  const processSingleArticle = async (article) => {
-    const articleId = getArticleId(article);
-    if (!articleId) {
-      addArticleErrorOutline(article);
-      return null;
+  /** Process one item: extract data if new/unsent, mark processed. Returns bookmark or null. */
+  const processItemAndExtractBookmarkIfNew = async (item) => {
+    const itemId = getItemId(item);
+    if (!itemId) {
+      addItemErrorOutline(item);
+      return;
     }
-    if (processedArticleIds.has(articleId)) {
-      addArticleProcessedOutline(article);
-      return null;
+    if (processedItemIds.has(itemId)) {
+      addItemProcessedOutline(item);
+      return;
     }
 
     try {
-      await clickShowMoreAndWait(article);
-      const bookmark = extractBookmarkFromArticle(article);
+      const bookmark = await extractBookmarkFromItem(item);
       if (!bookmark) {
-        addArticleErrorOutline(article);
-        return null;
+        addItemErrorOutline(item);
+        return;
       }
-      if (processedArticleIds.has(articleId)) {
+      if (processedItemIds.has(itemId)) {
         // race condition, but should be rare
-        addArticleProcessedOutline(article);
-        return null;
+        addItemProcessedOutline(item);
+        return;
       }
-      processedArticleIds.add(articleId);
-      addArticleProcessedOutline(article);
+      processedItemIds.add(itemId);
+      addItemProcessedOutline(item);
       return bookmark;
     } catch {
-      addArticleErrorOutline(article);
-      return null;
+      addItemErrorOutline(item);
+      return;
     }
   };
 
-  /** Process all visible articles in parallel; returns array of bookmark objects. */
-  const processAllArticles = async () => {
-    const articles = Array.from(document.querySelectorAll('article[role="article"]'));
-    const results = await Promise.all(articles.map((article) => processSingleArticle(article)));
-    return results.filter(Boolean);
+  /** Process all visible items and extract any new bookmarks. */
+  const processCurrentlyDisplayedItems = async () => {
+    const items = Array.from(document.querySelectorAll(CURRENTLY_DISPLAYED_ITEMS_SELECTOR));
+    const newBookmarks = (
+      await Promise.all(items.map((item) => processItemAndExtractBookmarkIfNew(item)))
+    ).filter(Boolean);
+    if (newBookmarks.length === 0) {
+      return;
+    }
+    pendingNewBookmarks.push(...newBookmarks);
+    updateBookmarksStatusDisplay();
   };
 
   /** Open save page and post payload with retries. */
-  const sendBookmarksToSavePage = () => {
-    const destinationWindow = window.open(LOCAL_BOOKMARKS_SAVE_URL, "_blank");
+  const sendUnsentBookmarksToSavePage = () => {
+    const destinationWindow = window.open(LOCAL_SAVE_BOOKMARKS_URL, '_blank');
     if (!destinationWindow) {
-      alert("Popup blocked");
+      alert('Popup blocked');
       return;
     }
 
     const postRequest = () => {
       setTimeout(() => {
-        destinationWindow.postMessage({ itemsToSave: extractedBookmarks }, "*");
-        sentBookmarksCount += extractedBookmarks.length;
-        // reset extracted
-        extractedBookmarks.length = 0;
-        updateExtractedStatusDisplay()
+        destinationWindow.postMessage({ bookmarksToSave: pendingNewBookmarks }, '*');
+        sentBookmarksCount += pendingNewBookmarks.length;
+        // reset pending
+        pendingNewBookmarks.length = 0;
+        updateBookmarksStatusDisplay();
       }, 200);
     };
 
@@ -150,15 +244,6 @@ const __VERSION__ = 'v1.0.1';
     } else {
       destinationWindow.addEventListener('load', postRequest, { once: true });
     }
-  };
-
-  const processCurrentlyDisplayedBookmarks = async () => {
-    const newExtractedBookmarks = await processAllArticles();
-    if (!newExtractedBookmarks.length) {
-      return;
-    }
-    extractedBookmarks.push(...newExtractedBookmarks);
-    updateExtractedStatusDisplay()
   };
 
   const getOrCreateCustomActionsWrapper = () => {
@@ -179,47 +264,47 @@ const __VERSION__ = 'v1.0.1';
       background: '#f0f0f0',
       border: '1px solid #aaa',
       borderRadius: '8px',
-      padding: '6px'
+      padding: '6px',
     });
     document.body.appendChild(wrapper);
     return wrapper;
   };
 
-  const setupTimelineMutationObserver = (callback) => {
-    waitForElement('[aria-label="Timeline: Bookmarks"] > div', (timelineWrapperEl) => {
+  const setupItemsWrapperMutationObserver = (callback) => {
+    waitForElement(ITEMS_WRAPPER_SELECTOR, (itemsWrapperEl) => {
       const observer = new MutationObserver(callback);
-      observer.observe(timelineWrapperEl, { attributes: false, childList: true, subtree: false, characterData: false });
+      observer.observe(itemsWrapperEl, ITEMS_WRAPPER_OBSERVER_CONFIG);
       return observer;
     });
   };
 
-  const setupExtractedStatusDisplay = () => {
-    const extractedStatusDiv = document.createElement("div");
-    extractedStatusDiv.id = 'extractedStatus';
-    Object.assign(extractedStatusDiv.style, {
+  const setupBookmarksStatusDisplay = () => {
+    const bookmarksStatusDiv = document.createElement('div');
+    bookmarksStatusDiv.id = 'bookmarksStatus';
+    Object.assign(bookmarksStatusDiv.style, {
       fontSize: '10px',
       color: '#333',
       textAlign: 'right'
     });
-    extractedStatusDiv.innerHTML = `Extracted + unsent: <span></span><br />Sent: <span></span>`;
-    getOrCreateCustomActionsWrapper().appendChild(extractedStatusDiv);
-    extractedStatusDiv.querySelector('span:first-child').addEventListener('click', () => {
-      console.log('extractedBookmarks', extractedBookmarks);
+    bookmarksStatusDiv.innerHTML = 'Pending new: <span></span><br />Sent: <span></span>';
+    getOrCreateCustomActionsWrapper().appendChild(bookmarksStatusDiv);
+    bookmarksStatusDiv.querySelector('span:first-child').addEventListener('click', () => {
+      console.log('pendingNewBookmarks', pendingNewBookmarks);
     });
-    updateExtractedStatusDisplay();
+    updateBookmarksStatusDisplay();
   };
 
-  const updateExtractedStatusDisplay = () => {
-    const extractedStatusDiv = document.querySelector('#extractedStatus');
-    if (extractedStatusDiv) {
-      const [extractedCountSpan, sentCountSpan] = Array.from(extractedStatusDiv.querySelectorAll('span'));
-      extractedCountSpan.textContent = extractedBookmarks.length;
+  const updateBookmarksStatusDisplay = () => {
+    const bookmarksStatusDiv = document.querySelector('#bookmarksStatus');
+    if (bookmarksStatusDiv) {
+      const [pendingNewCountSpan, sentCountSpan] = Array.from(bookmarksStatusDiv.querySelectorAll('span'));
+      pendingNewCountSpan.textContent = pendingNewBookmarks.length;
       sentCountSpan.textContent = sentBookmarksCount;
     }
   };
 
-  const setupProcessButton = () => {
-    const processButton = document.createElement("button");
+  const setupStartProcessingButton = () => {
+    const processButton = document.createElement('button');
     processButton.id = 'processButton';
     Object.assign(processButton.style, {
       background: '#fff',
@@ -228,25 +313,25 @@ const __VERSION__ = 'v1.0.1';
       padding: '6px',
       fontSize: '12px',
       color: '#333',
-      cursor: 'pointer'
+      cursor: 'pointer',
     });
-    processButton.textContent = "Process";
-    processButton.addEventListener("click", () => {
+    processButton.textContent = 'Process';
+    processButton.addEventListener('click', () => {
       processButton.disabled = true;
-      processButton.textContent = "Processing...";
+      processButton.textContent = 'Processing...';
       processButton.style.backgroundColor = '#f0f0f0';
       processButton.style.color = '#666';
-      setupTimelineMutationObserver(() => {
-        processCurrentlyDisplayedBookmarks();
+      setupItemsWrapperMutationObserver(() => {
+        processCurrentlyDisplayedItems();
       });
       // fire immediately for current content as observer only fires after DOM updates
-      processCurrentlyDisplayedBookmarks();
+      processCurrentlyDisplayedItems();
     });
     getOrCreateCustomActionsWrapper().appendChild(processButton);
   };
 
   const setupSendButton = () => {
-    const sendButton = document.createElement("button");
+    const sendButton = document.createElement('button');
     Object.assign(sendButton.style, {
       background: '#fff',
       border: '1px solid #aaa',
@@ -254,15 +339,15 @@ const __VERSION__ = 'v1.0.1';
       padding: '6px',
       fontSize: '12px',
       color: '#333',
-      cursor: 'pointer'
+      cursor: 'pointer',
     });
-    sendButton.textContent = "Send";
-    sendButton.addEventListener("click", sendBookmarksToSavePage);
+    sendButton.textContent = 'Send';
+    sendButton.addEventListener('click', sendUnsentBookmarksToSavePage);
     getOrCreateCustomActionsWrapper().appendChild(sendButton);
   };
 
   const setupVersionDisplay = () => {
-    const versionDiv = document.createElement("div");
+    const versionDiv = document.createElement('div');
     versionDiv.style.fontSize = '10px';
     versionDiv.textContent = `Version: ${__VERSION__}`;
     getOrCreateCustomActionsWrapper().appendChild(versionDiv);
@@ -276,18 +361,18 @@ const __VERSION__ = 'v1.0.1';
     setTimeout(() => {
       const processButton = document.getElementById('processButton');
       if (!processButton) return;
-      // initiate bookmark harvesting
+      // initiate bookmarks harvesting
       processButton.click();
       let pageDownRemaining = pageDownTarget;
-      // initiate page scrolling
+      // initiate page down scrolling
       const interval = setInterval(() => {
         window.scrollBy(0, window.innerHeight);
         pageDownRemaining--;
         if (pageDownRemaining <= 0) {
           clearInterval(interval);
-          // send extracted bookmarks to save page
+          // send unsent bookmarks to save page after scrolling
           setTimeout(() => {
-            sendBookmarksToSavePage();
+            sendUnsentBookmarksToSavePage();
           }, postScrollDelayMs);
           return;
         }
@@ -295,16 +380,14 @@ const __VERSION__ = 'v1.0.1';
     }, initialDelayMs);
   };
 
+  // ------ INITIALIZATION FUNCTIONS (DO NOT MODIFY) ------
+
   const init = () => {
-    if (!isBookmarksPage()) {
-      alert("Run on x.com/i/bookmarks");
-      return;
-    }
-    setupExtractedStatusDisplay();
-    setupProcessButton();
+    setupBookmarksStatusDisplay();
+    setupStartProcessingButton();
     setupSendButton();
     setupVersionDisplay();
-    updateExtractedStatusDisplay();
+    updateBookmarksStatusDisplay();
     if (window.location.search.includes('autosync=true')) {
       triggerAutoSync();
     }
