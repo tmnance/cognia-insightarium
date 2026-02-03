@@ -286,7 +286,7 @@ const __VERSION__ = 'v1.0.0';
     });
     extractedStatusDiv.innerHTML = 'Extracted + unsent: <span></span><br />Sent: <span></span>';
     getOrCreateCustomActionsWrapper().appendChild(extractedStatusDiv);
-    extractedStatusDiv.querySelector('span').addEventListener('click', () => {
+    extractedStatusDiv.querySelector('span:first-child').addEventListener('click', () => {
       console.log('extractedItems', extractedItems);
     });
 
