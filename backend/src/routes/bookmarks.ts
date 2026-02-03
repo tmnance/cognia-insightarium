@@ -132,7 +132,7 @@ function extractBookmarkData(item: BookmarkItemLike): { source: string; external
       break;
     case 'linkedin':
       source = 'linkedin';
-      match = item.url.match(/^https?:\/\/(?:www\.)?linkedin\.com\/posts\/([^/]+)/);
+      match = item.url.match(/^https?:\/\/(?:www\.)?linkedin\.com\/feed\/update\/([^/]+)/);
       if (match) {
         externalId = match[1];
       }
@@ -191,15 +191,12 @@ router.post('/check-duplicates', async (req: Request, res: Response) => {
       if (existing) {
         // Check if anything has changed
         const newContent = item.text || null;
-        const newSourceCreatedAt = item.timestamp ? new Date(item.timestamp) : null;
         const newAuthor = normalizeAuthor(item.author);
         
         const contentChanged = newContent !== null && existing.content !== newContent;
-        const sourceCreatedAtChanged = newSourceCreatedAt !== null && 
-          (!existing.sourceCreatedAt || existing.sourceCreatedAt.getTime() !== newSourceCreatedAt.getTime());
         const authorChanged = newAuthor !== null && existing.author !== newAuthor;
         
-        if (contentChanged || sourceCreatedAtChanged || authorChanged) {
+        if (contentChanged || authorChanged) {
           changedIndices.push(i);
         } else {
           duplicateIndices.push(i);
