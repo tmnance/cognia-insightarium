@@ -15,6 +15,7 @@ export default function Tagging() {
   const [bookmarkCount, setBookmarkCount] = useState<number>(0);
   const [totalUntaggedCount, setTotalUntaggedCount] = useState<number>(0);
   const [totalBookmarkCount, setTotalBookmarkCount] = useState<number>(0);
+  const [llmBookmarkCategorizationUrl, setLlmBookmarkCategorizationUrl] = useState<string>('');
   const [llmResponse, setLlmResponse] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
@@ -32,6 +33,7 @@ export default function Tagging() {
         const stats = await bookmarkApi.tagging.getStats();
         setTotalUntaggedCount(stats.totalUntaggedCount);
         setTotalBookmarkCount(stats.totalBookmarkCount);
+        setLlmBookmarkCategorizationUrl(stats.llmBookmarkCategorizationUrl);
       } catch (err) {
         console.error('Failed to load tagging stats:', err);
         // Don't show error to user for stats loading failure
@@ -124,6 +126,7 @@ export default function Tagging() {
         const stats = await bookmarkApi.tagging.getStats();
         setTotalUntaggedCount(stats.totalUntaggedCount);
         setTotalBookmarkCount(stats.totalBookmarkCount);
+        setLlmBookmarkCategorizationUrl(stats.llmBookmarkCategorizationUrl);
       } catch (err) {
         console.error('Failed to refresh stats:', err);
       }
@@ -253,7 +256,20 @@ export default function Tagging() {
                 className="w-full h-96 p-4 border border-gray-300 rounded-lg font-mono text-sm bg-gray-50 overflow-auto"
               />
               <p className="mt-2 text-sm text-gray-600">
-                Copy the prompt above and paste it into ChatGPT, Grok, or another LLM tool.
+                Copy the prompt above and paste it into{' '}
+                {llmBookmarkCategorizationUrl ? (
+                  <a
+                    href={llmBookmarkCategorizationUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:text-blue-800 underline font-medium"
+                  >
+                    {llmBookmarkCategorizationUrl}
+                  </a>
+                ) : (
+                  'ChatGPT, Grok, or another LLM tool'
+                )}
+                .
               </p>
             </div>
           )}
@@ -298,7 +314,21 @@ export default function Tagging() {
           <ol className="list-decimal list-inside space-y-2 text-sm text-blue-800">
             <li>Click "Generate Prompt" to create a prompt with untagged bookmarks</li>
             <li>Copy the generated prompt</li>
-            <li>Paste it into ChatGPT, Grok, Claude, or another LLM tool</li>
+            {llmBookmarkCategorizationUrl ? (
+              <li>
+                Paste it into{' '}
+                <a
+                  href={llmBookmarkCategorizationUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:text-blue-800 underline font-medium"
+                >
+                  {llmBookmarkCategorizationUrl}
+                </a>
+              </li>
+            ) : (
+              <li>Paste it into ChatGPT, Grok, Claude, or another LLM tool</li>
+            )}
             <li>Copy the LLM's JSON response</li>
             <li>Paste the response into the "Step 2" textarea above</li>
             <li>Click "Apply Tags to Bookmarks" to save the tags</li>

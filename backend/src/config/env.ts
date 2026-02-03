@@ -11,9 +11,10 @@ export const config = {
   linkedInClientId: process.env.LINKEDIN_CLIENT_ID || '',
   linkedInClientSecret: process.env.LINKEDIN_CLIENT_SECRET || '',
   linkedInAccessToken: process.env.LINKEDIN_ACCESS_TOKEN || '',
+  // LLM Tagging
+  llmBookmarkCategorizationUrl: process.env.LLM_BOOKMARK_CATEGORIZATION_URL || '',
 };
 
 if (!config.databaseUrl) {
   throw new Error('DATABASE_URL environment variable is required');
 }
-

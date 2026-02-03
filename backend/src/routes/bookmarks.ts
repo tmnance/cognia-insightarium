@@ -4,6 +4,7 @@ import { fetchUrlContent } from '../services/urlFetcher';
 import { createBookmarkIfNotExists, findExistingBookmark, updateBookmark } from '../utils/deduplication';
 import { logger } from '../utils/logger';
 import { prisma } from '../db/prismaClient';
+import { config } from '../config/env';
 import {
   getBookmarkTags,
   addTagToBookmark,
@@ -519,6 +520,7 @@ router.get('/llm-tagging/stats', async (_req: Request, res: Response) => {
       success: true,
       totalUntaggedCount: totalUntagged,
       totalBookmarkCount: totalBookmarks,
+      llmBookmarkCategorizationUrl: config.llmBookmarkCategorizationUrl,
     });
   } catch (error) {
     logger.error('Error getting tagging stats', error);
