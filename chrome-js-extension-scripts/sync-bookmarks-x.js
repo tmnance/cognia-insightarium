@@ -1,6 +1,6 @@
 // X bookmarks page
 // https://x.com/i/bookmarks
-const __VERSION__ = 'v1.0.0';
+const __VERSION__ = 'v1.0.1';
 
 (() => {
   const LOCAL_BOOKMARKS_SAVE_URL = 'http://localhost:3000/save';
@@ -12,21 +12,21 @@ const __VERSION__ = 'v1.0.0';
 
   const isBookmarksPage = () => /^https:\/\/x\.com\/i\/bookmarks/.test(location.href);
 
-	const waitForElement = (selector, callback, maxWait = 10000) => {
-		let elapsedTime = 0;
-		const interval = setInterval(() => {
-			elapsedTime += 100;
-			if (elapsedTime > maxWait) {
-				clearInterval(interval);
-				return;
-			}
-			const element = document.querySelector(selector);
-			if (element) {
-				clearInterval(interval);
-				callback(element);
-			}
-		}, 100);
-	};
+  const waitForElement = (selector, callback, maxWait = 10000) => {
+    let elapsedTime = 0;
+    const interval = setInterval(() => {
+      elapsedTime += 100;
+      if (elapsedTime > maxWait) {
+        clearInterval(interval);
+        return;
+      }
+      const element = document.querySelector(selector);
+      if (element) {
+        clearInterval(interval);
+        callback(element);
+      }
+    }, 100);
+  };
 
   const getArticleId = (article) => {
     return article.querySelector("time")?.parentElement?.href?.split("/").pop() || null;
@@ -220,6 +220,7 @@ const __VERSION__ = 'v1.0.0';
 
   const setupProcessButton = () => {
     const processButton = document.createElement("button");
+    processButton.id = 'processButton';
     Object.assign(processButton.style, {
       background: '#fff',
       border: '1px solid #aaa',
@@ -267,6 +268,33 @@ const __VERSION__ = 'v1.0.0';
     getOrCreateCustomActionsWrapper().appendChild(versionDiv);
   };
 
+  const triggerAutoSync = () => {
+    const initialDelayMs = 1600;
+    const postScrollDelayMs = 300;
+    const pageDownTarget = 7;
+
+    setTimeout(() => {
+      const processButton = document.getElementById('processButton');
+      if (!processButton) return;
+      // initiate bookmark harvesting
+      processButton.click();
+      let pageDownRemaining = pageDownTarget;
+      // initiate page scrolling
+      const interval = setInterval(() => {
+        window.scrollBy(0, window.innerHeight);
+        pageDownRemaining--;
+        if (pageDownRemaining <= 0) {
+          clearInterval(interval);
+          // send extracted bookmarks to save page
+          setTimeout(() => {
+            sendBookmarksToSavePage();
+          }, postScrollDelayMs);
+          return;
+        }
+      }, postScrollDelayMs);
+    }, initialDelayMs);
+  };
+
   const init = () => {
     if (!isBookmarksPage()) {
       alert("Run on x.com/i/bookmarks");
@@ -277,6 +305,9 @@ const __VERSION__ = 'v1.0.0';
     setupSendButton();
     setupVersionDisplay();
     updateExtractedStatusDisplay();
+    if (window.location.search.includes('autosync=true')) {
+      triggerAutoSync();
+    }
   };
 
   init();
