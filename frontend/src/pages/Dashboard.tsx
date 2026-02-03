@@ -109,12 +109,13 @@ export default function Dashboard() {
       filtered = filtered.filter((bookmark) => {
         const contentMatch = bookmark.content?.toLowerCase().includes(query);
         const urlMatch = bookmark.url?.toLowerCase().includes(query);
+        const authorMatch = bookmark.author?.toLowerCase().includes(query);
         const tagMatch = bookmark.tags?.some(
           (tag) =>
             tag.name.toLowerCase().includes(query) ||
             tag.description?.toLowerCase().includes(query)
         );
-        return contentMatch || urlMatch || tagMatch;
+        return contentMatch || urlMatch || authorMatch || tagMatch;
       });
     }
 
@@ -272,7 +273,7 @@ export default function Dashboard() {
                 setSearchQuery(e.target.value);
                 setCurrentPage(1);
               }}
-              placeholder="Search bookmarks by content, URL, or tags..."
+              placeholder="Search bookmarks by content, URL, author, or tags..."
               className="w-full px-4 py-2 pl-10 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
             {searchQuery ? (

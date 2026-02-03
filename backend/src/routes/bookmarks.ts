@@ -89,6 +89,15 @@ router.post('/url', async (req: Request, res: Response) => {
 interface BookmarkItemLike {
   platform?: string;
   url?: string | null;
+  author?: string | null;
+}
+
+/**
+ * Normalize author string by removing leading '@' if present
+ */
+function normalizeAuthor(author: string | null | undefined): string | null {
+  if (!author) return null;
+  return author.replace(/^@+/, '').trim() || null;
 }
 
 /**
@@ -152,12 +161,14 @@ router.post('/check-duplicates', async (req: Request, res: Response) => {
         // Check if anything has changed
         const newContent = item.text || null;
         const newSourceCreatedAt = item.timestamp ? new Date(item.timestamp) : null;
+        const newAuthor = normalizeAuthor(item.author);
         
         const contentChanged = newContent !== null && existing.content !== newContent;
         const sourceCreatedAtChanged = newSourceCreatedAt !== null && 
           (!existing.sourceCreatedAt || existing.sourceCreatedAt.getTime() !== newSourceCreatedAt.getTime());
+        const authorChanged = newAuthor !== null && existing.author !== newAuthor;
         
-        if (contentChanged || sourceCreatedAtChanged) {
+        if (contentChanged || sourceCreatedAtChanged || authorChanged) {
           changedIndices.push(i);
         } else {
           duplicateIndices.push(i);
@@ -211,6 +222,9 @@ router.post('/bulk', async (req: Request, res: Response) => {
         // Parse sourceCreatedAt from timestamp if provided
         const sourceCreatedAt = item.timestamp ? new Date(item.timestamp) : null;
 
+        // Normalize author (strip leading '@')
+        const author = normalizeAuthor(item.author);
+
         // Check if bookmark exists
         const existing = await findExistingBookmark({
           source,
@@ -224,6 +238,7 @@ router.post('/bulk', async (req: Request, res: Response) => {
           bookmark = await updateBookmark(existing.id, {
             content: item.text || null,
             sourceCreatedAt: sourceCreatedAt || undefined,
+            author: author ?? undefined,
           });
         } else {
           // Create new bookmark
@@ -233,6 +248,7 @@ router.post('/bulk', async (req: Request, res: Response) => {
             url,
             content: item.text || null,
             sourceCreatedAt,
+            author,
           });
         }
 

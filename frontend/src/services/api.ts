@@ -24,6 +24,7 @@ export interface Bookmark {
   externalId?: string | null;
   url?: string | null;
   content?: string | null;
+  author?: string | null;
   createdAt: string;
   updatedAt: string;
   sourceCreatedAt?: string | null;
@@ -121,7 +122,7 @@ export const bookmarkApi = {
       description?: string | null;
       color?: string | null;
     }): Promise<Tag> => {
-      const response = await api.post<{ success: boolean; tag: Tag }>('/tags', data);
+      const response = await api.post<{ success: boolean; tag: Tag; error?: string }>('/tags', data);
       if (!response.data.tag) {
         throw new Error(response.data.error || 'Failed to create tag');
       }

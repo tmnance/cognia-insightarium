@@ -13,6 +13,7 @@ model Bookmark {
   externalId      String?  // ID from X, LinkedIn, etc
   url             String?
   content         String?  // fetched HTML or raw text
+  author          String?  // Author/username from originating platform (without @ prefix)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   taggingReviewedAt DateTime? // When bookmark was last reviewed for tagging (null = never reviewed)

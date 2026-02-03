@@ -14,6 +14,13 @@ interface PostMessageData {
   itemsToSave: SaveItem[];
 }
 
+/** Remove leading '@' from author string if present */
+const normalizeAuthor = (author: string | undefined): string | undefined => {
+  if (!author) return undefined;
+  const normalized = author.replace(/^@+/, '').trim();
+  return normalized || undefined;
+};
+
 export default function Save() {
   const navigate = useNavigate();
   const [items, setItems] = useState<SaveItem[]>([]);
@@ -106,7 +113,12 @@ export default function Save() {
 
   const handleSaveAll = async () => {
     // Save new items and changed items (exclude true duplicates)
-    const itemsToSave = items.filter((_, index) => !duplicateIndices.has(index));
+    const itemsToSave = items
+      .filter((_, index) => !duplicateIndices.has(index))
+      .map((item) => ({
+        ...item,
+        author: normalizeAuthor(item.author),
+      }));
 
     if (itemsToSave.length === 0) return;
 

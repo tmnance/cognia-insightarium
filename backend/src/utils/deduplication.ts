@@ -7,6 +7,7 @@ export interface BookmarkData {
   externalId?: string | null;
   url?: string | null;
   content?: string | null;
+  author?: string | null; // Author/username from originating platform
   sourceCreatedAt?: Date | string | null; // When content was posted on originating platform
 }
 
@@ -75,6 +76,9 @@ export async function updateBookmark(bookmarkId: string, data: Partial<BookmarkD
   if (data.content !== undefined) {
     updateData.content = data.content;
   }
+  if (data.author !== undefined) {
+    updateData.author = data.author;
+  }
   if (sourceCreatedAt !== undefined) {
     updateData.sourceCreatedAt = sourceCreatedAt;
   }
@@ -131,6 +135,7 @@ export async function createBookmarkIfNotExists(data: BookmarkData) {
         externalId: data.externalId || null,
         url: data.url || null,
         content: data.content || null,
+        author: data.author || null,
         sourceCreatedAt,
         firstIngestedAt: now,
         lastIngestedAt: now,

@@ -206,6 +206,11 @@ function BookmarkItem({
           >
             {bookmark.source.toUpperCase()}
           </span>
+          {bookmark.author && (
+            <span className="text-sm text-gray-700 font-medium">
+              @{bookmark.author}
+            </span>
+          )}
           <span className="text-xs text-gray-600 font-medium" title={getFullDate(displayDate)}>
             {displayDateLabel}: {formatDate(displayDate)}
           </span>
