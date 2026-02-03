@@ -1,6 +1,6 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bookmark, Tag, bookmarkApi } from '../services/api';
+import { Bookmark, Tag, bookmarkApi, configApi, SavedBookmarkUrl } from '../services/api';
 import BookmarkList from '../components/BookmarkList';
 import AddBookmarkForm from '../components/AddBookmarkForm';
 
@@ -16,6 +16,9 @@ export default function Dashboard() {
   const [isLoadingTags, setIsLoadingTags] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAddBookmarkModalOpen, setIsAddBookmarkModalOpen] = useState(false);
+  const [savedBookmarkUrls, setSavedBookmarkUrls] = useState<SavedBookmarkUrl[]>([]);
+  const [syncDropdownOpen, setSyncDropdownOpen] = useState(false);
+  const syncDropdownRef = useRef<HTMLDivElement>(null);
 
   // Filtering, sorting, and pagination state
   const [searchQuery, setSearchQuery] = useState('');
@@ -96,8 +99,33 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
+    const loadConfig = async () => {
+      try {
+        const { savedBookmarkUrls: urls } = await configApi.getConfig();
+        setSavedBookmarkUrls(urls);
+      } catch (err) {
+        console.error('Failed to load config', err);
+      }
+    };
+    loadConfig();
+  }, []);
+
+  useEffect(() => {
     loadBookmarks();
   }, [selectedTags]);
+
+  // Close sync dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (syncDropdownRef.current && !syncDropdownRef.current.contains(event.target as Node)) {
+        setSyncDropdownOpen(false);
+      }
+    };
+    if (syncDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [syncDropdownOpen]);
 
   // Filter and sort bookmarks
   const filteredAndSortedBookmarks = useMemo(() => {
@@ -241,22 +269,59 @@ export default function Dashboard() {
             <h1 className="text-4xl font-bold text-gray-900 mb-2">Cognia Insightarium</h1>
             <p className="text-gray-600">Your personal library of insights</p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex gap-3 items-center flex-wrap">
             <button
               onClick={() => setIsAddBookmarkModalOpen(true)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm"
+              className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium shadow-sm"
             >
               + Add Bookmark
             </button>
+            {savedBookmarkUrls.length > 0 && (
+              <div className="relative" ref={syncDropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setSyncDropdownOpen((open) => !open)}
+                  className="py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition-colors font-medium shadow-sm flex items-stretch overflow-hidden"
+                >
+                  <span className="pl-4 pr-3 flex items-center">Sync Bookmarks</span>
+                  <span className="flex items-center border-l border-sky-500/50 px-3">
+                    <svg
+                      className={`w-4 h-4 transition-transform ${syncDropdownOpen ? 'rotate-180' : ''}`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      aria-hidden
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </span>
+                </button>
+                {syncDropdownOpen && (
+                  <div className="absolute left-0 top-full mt-1 py-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-[180px]">
+                    {savedBookmarkUrls.map(({ label, url }) => (
+                      <a
+                        key={url}
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      >
+                        {label}
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             <button
               onClick={() => navigate('/tags')}
-              className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium shadow-sm"
+              className="px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors font-medium shadow-sm"
             >
               Manage Tags
             </button>
             <button
               onClick={() => navigate('/tagging')}
-              className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium shadow-sm"
+              className="px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors font-medium shadow-sm"
             >
               🤖 LLM Tagging
             </button>

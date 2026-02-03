@@ -3,6 +3,7 @@ import cors from 'cors';
 import { config } from './config/env';
 import { logger } from './utils/logger';
 import bookmarkRoutes from './routes/bookmarks';
+import configRoutes from './routes/config';
 import contentRoutes from './routes/content';
 import tagRoutes from './routes/tags';
 import { initializeDefaultTags } from './services/tagService';
@@ -33,6 +34,7 @@ app.get('/health', (_req, res) => {
 
 // API routes
 app.use('/api/bookmarks', bookmarkRoutes);
+app.use('/api/config', configRoutes);
 app.use('/api/content', contentRoutes);
 app.use('/api/tags', tagRoutes);
 

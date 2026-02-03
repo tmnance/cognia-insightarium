@@ -41,6 +41,19 @@ export interface ApiResponse<T> {
   error?: string;
 }
 
+export interface SavedBookmarkUrl {
+  label: string;
+  url: string;
+}
+
+export const configApi = {
+  getConfig: async (): Promise<{ savedBookmarkUrls: SavedBookmarkUrl[] }> => {
+    const response = await api.get<{ success: boolean; savedBookmarkUrls: SavedBookmarkUrl[] }>('/config');
+    if (!response.data.success) throw new Error('Failed to load config');
+    return { savedBookmarkUrls: response.data.savedBookmarkUrls };
+  },
+};
+
 export const bookmarkApi = {
   // Get all bookmarks
   getAll: async (source?: string, tags?: string[]): Promise<Bookmark[]> => {
