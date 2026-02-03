@@ -107,13 +107,43 @@ function normalizeAuthor(author: string | null | undefined): string | null {
 function extractBookmarkData(item: BookmarkItemLike): { source: string; externalId: string | null; url: string | null } {
   let externalId: string | null = null;
   let source = 'url';
+  let match: RegExpMatchArray | null = null;
 
-  if (item.platform === 'x' && item.url) {
-    source = 'x';
-    const match = item.url.match(/\/status\/(\d+)/) || item.url.match(/x\.com\/\w+\/status\/(\d+)/);
-    if (match) {
-      externalId = match[1];
-    }
+  if (!item.url) {
+    throw new Error('URL is required');
+  }
+
+  switch (item.platform) {
+    case 'x':
+      source = 'x';
+      match = item.url.match(/\/status\/(\d+)/) || item.url.match(/x\.com\/\w+\/status\/(\d+)/);
+      if (match) {
+        externalId = match[1];
+      }
+      break;
+    case 'reddit':
+      source = 'reddit';
+      match = item.url.match(/^https?:\/\/(?:www\.)?reddit\.com\/r\/([^/]+)\/comments\/([^/]+)(?:\/[^/]+)?(?:\/comment\/([^/?#]+))?\/?(?:[?#].*)?$/i);
+      if (match) {
+        const [, subreddit, postId, commentId] = match;
+        externalId = `${subreddit}-${postId}${commentId ? `-${commentId}` : ''}`;
+      }
+      break;
+    case 'linkedin':
+      source = 'linkedin';
+      match = item.url.match(/^https?:\/\/(?:www\.)?linkedin\.com\/posts\/([^/]+)/);
+      if (match) {
+        externalId = match[1];
+      }
+      break;
+    default:
+      source = 'url';
+      externalId = item.url;
+      break;
+  }
+
+  if (!externalId) {
+    throw new Error('External ID is required');
   }
 
   return {

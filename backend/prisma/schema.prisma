@@ -9,7 +9,7 @@ generator client {
 
 model Bookmark {
   id              String   @id @default(cuid())
-  source          String   // "x", "linkedin", "url", "raw"
+  source          String   // "x", "reddit", "linkedin", "url", "raw"
   externalId      String?  // ID from X, LinkedIn, etc
   url             String?
   content         String?  // fetched HTML or raw text
