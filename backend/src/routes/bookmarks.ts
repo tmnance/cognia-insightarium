@@ -1,5 +1,4 @@
 import express, { Request, Response } from 'express';
-import { fetchLinkedInSavedPosts } from '../services/linkedInIntegration';
 import { fetchUrlContent } from '../services/urlFetcher';
 import { createBookmarkIfNotExists, findExistingBookmark, updateBookmark } from '../utils/deduplication';
 import { logger } from '../utils/logger';
@@ -13,40 +12,6 @@ import {
 } from '../services/tagService';
 
 const router = express.Router();
-
-/**
- * GET /api/bookmarks/linkedin
- * Fetch saved posts from LinkedIn and save them
- */
-router.get('/linkedin', async (_req: Request, res: Response) => {
-  try {
-    logger.info('Fetching LinkedIn saved posts via API');
-    const posts = await fetchLinkedInSavedPosts();
-
-    const savedPosts = [];
-    for (const post of posts) {
-      const saved = await createBookmarkIfNotExists({
-        source: 'linkedin',
-        externalId: post.externalId,
-        url: post.url,
-        content: post.content,
-      });
-      savedPosts.push(saved);
-    }
-
-    return res.json({
-      success: true,
-      count: savedPosts.length,
-      bookmarks: savedPosts,
-    });
-  } catch (error) {
-    logger.error('Error in GET /api/bookmarks/linkedin', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Failed to fetch LinkedIn saved posts',
-    });
-  }
-});
 
 /**
  * POST /api/bookmarks/url
