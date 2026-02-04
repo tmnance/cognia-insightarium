@@ -141,6 +141,7 @@ router.post('/check-duplicates', async (req: Request, res: Response) => {
 
     const duplicateIndices: number[] = [];
     const changedIndices: number[] = [];
+    const changeDetails: Record<number, { fields: string[] }> = {};
 
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
@@ -163,6 +164,16 @@ router.post('/check-duplicates', async (req: Request, res: Response) => {
         
         if (contentChanged || authorChanged) {
           changedIndices.push(i);
+          const changedFields: string[] = [];
+          if (contentChanged) changedFields.push('content');
+          if (authorChanged) changedFields.push('author');
+          changeDetails[i] = {
+            fields: changedFields,
+            existingContent: existing.content || null,
+            existingAuthor: existing.author || null,
+            newContent: newContent,
+            newAuthor: newAuthor,
+          };
         } else {
           duplicateIndices.push(i);
         }
@@ -173,6 +184,7 @@ router.post('/check-duplicates', async (req: Request, res: Response) => {
       success: true,
       duplicateIndices,
       changedIndices,
+      changeDetails,
       duplicateCount: duplicateIndices.length,
       changedCount: changedIndices.length,
     });

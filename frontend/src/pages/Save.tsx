@@ -2,6 +2,191 @@ import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { bookmarkApi } from '../services/api';
 
+interface BookmarkItemProps {
+  bookmark: SaveBookmark;
+  index: number;
+  isDuplicate: boolean;
+  isChanged: boolean;
+  changeDetail?: { fields: string[]; existingContent?: string | null; existingAuthor?: string | null; newContent?: string | null; newAuthor?: string | null };
+  isExpanded: boolean;
+  onToggleExpand: () => void;
+}
+
+function BookmarkItem({ bookmark, isDuplicate, isChanged, changeDetail, isExpanded, onToggleExpand }: BookmarkItemProps) {
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [showExpandButton, setShowExpandButton] = useState(false);
+  const hasContentChanges = isChanged && changeDetail?.fields.includes('content');
+  const hasAuthorChanges = isChanged && changeDetail?.fields.includes('author');
+
+  // Check if content should show expand button
+  useEffect(() => {
+    if (contentRef.current && !isExpanded && bookmark.text) {
+      const isTruncated = contentRef.current.scrollHeight > contentRef.current.clientHeight;
+      setShowExpandButton(isTruncated);
+    } else if (isExpanded) {
+      setShowExpandButton(true);
+    }
+  }, [isExpanded, bookmark.text]);
+
+  return (
+    <div
+      className={`border rounded-lg p-4 transition-colors ${
+        isDuplicate
+          ? 'border-amber-300 bg-amber-50 hover:bg-amber-100'
+          : isChanged
+          ? 'border-blue-300 bg-blue-50 hover:bg-blue-100'
+          : 'border-gray-200 hover:bg-gray-50'
+      }`}
+    >
+      <div className="flex items-start justify-between">
+        <div className="flex-1">
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
+            <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-semibold rounded">
+              {bookmark.platform.toUpperCase()}
+            </span>
+            {isDuplicate && (
+              <span className="px-2 py-1 bg-amber-200 text-amber-800 text-xs font-semibold rounded flex items-center gap-1">
+                <svg
+                  className="w-3 h-3"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                  />
+                </svg>
+                Duplicate
+              </span>
+            )}
+            {isChanged && (
+              <span className="px-2 py-1 bg-blue-200 text-blue-800 text-xs font-semibold rounded flex items-center gap-1" title={changeDetail?.fields ? `Changed: ${changeDetail.fields.join(', ')}` : 'Updated'}>
+                <svg
+                  className="w-3 h-3"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                  />
+                </svg>
+                Updated
+              </span>
+            )}
+            {bookmark.author && (
+              <span className="text-sm text-gray-600">
+                {hasAuthorChanges && changeDetail?.existingAuthor ? (
+                  <>
+                    <span className="bg-red-100 text-red-800 line-through px-1 rounded text-xs">
+                      @{normalizeAuthor(changeDetail.existingAuthor)}
+                    </span>
+                    {' → '}
+                    <span className="bg-green-100 text-green-800 px-1 rounded text-xs">
+                      @{normalizeAuthor(bookmark.author)}
+                    </span>
+                  </>
+                ) : (
+                  <>@{normalizeAuthor(bookmark.author)}</>
+                )}
+              </span>
+            )}
+            {bookmark.timestamp && (
+              <span className="text-xs text-gray-400">
+                {new Date(bookmark.timestamp).toLocaleDateString()}
+              </span>
+            )}
+          </div>
+
+          {bookmark.url && (
+            <a
+              href={bookmark.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:text-blue-800 text-sm break-all block mb-2"
+            >
+              {bookmark.url}
+            </a>
+          )}
+
+          {bookmark.text && (
+            <div className="mt-2">
+              {hasContentChanges ? (
+                <div className="space-y-2">
+                  {isExpanded && changeDetail?.existingContent && (
+                    <div className="p-2 bg-red-50 border border-red-200 rounded">
+                      <p className="text-xs text-red-700 font-medium mb-1">Previous:</p>
+                      <p className="text-sm text-red-800 line-through whitespace-pre-wrap">
+                        {changeDetail.existingContent}
+                      </p>
+                    </div>
+                  )}
+                  <div
+                    ref={contentRef}
+                    className={`text-sm whitespace-pre-wrap ${
+                      isExpanded ? '' : 'line-clamp-3'
+                    }`}
+                  >
+                    {isExpanded && changeDetail?.existingContent ? (
+                      <>
+                        <p className="text-xs text-green-700 font-medium mb-1">Updated:</p>
+                        <p className="text-gray-700 bg-green-50 border border-green-200 px-2 py-1 rounded">
+                          {bookmark.text}
+                        </p>
+                      </>
+                    ) : (
+                      <span className="bg-green-50 border border-green-200 px-1 rounded">
+                        {bookmark.text}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <p
+                  ref={contentRef}
+                  className={`text-gray-700 text-sm whitespace-pre-wrap ${
+                    isExpanded ? '' : 'line-clamp-3'
+                  }`}
+                >
+                  {bookmark.text}
+                </p>
+              )}
+              {showExpandButton && (
+                <button
+                  onClick={onToggleExpand}
+                  className="mt-2 text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors"
+                >
+                  {isExpanded ? 'Show less' : 'Show more'}
+                </button>
+              )}
+            </div>
+          )}
+          
+          {isChanged && changeDetail?.fields && changeDetail.fields.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-blue-200">
+              <p className="text-xs text-blue-700 font-medium mb-2">Changes detected:</p>
+              <ul className="text-xs text-blue-600 list-disc list-inside space-y-1">
+                {changeDetail.fields.map((field) => (
+                  <li key={field}>
+                    {field === 'content' && 'Content has been updated'}
+                    {field === 'author' && 'Author has been updated'}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface SaveBookmark {
   platform: string;
   url: string;
@@ -26,6 +211,8 @@ export default function Save() {
   const [bookmarks, setBookmarks] = useState<SaveBookmark[]>([]);
   const [duplicateIndices, setDuplicateIndices] = useState<Set<number>>(new Set());
   const [changedIndices, setChangedIndices] = useState<Set<number>>(new Set());
+  const [changeDetails, setChangeDetails] = useState<Record<number, { fields: string[]; existingContent?: string | null; existingAuthor?: string | null; newContent?: string | null; newAuthor?: string | null }>>({});
+  const [expandedBookmarks, setExpandedBookmarks] = useState<Set<number>>(new Set());
   const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -41,6 +228,7 @@ export default function Save() {
       const result = await bookmarkApi.checkDuplicates(bookmarksToCheck);
       setDuplicateIndices(new Set(result.duplicateIndices));
       setChangedIndices(new Set(result.changedIndices));
+      setChangeDetails(result.changeDetails || {});
 
       if (result.duplicateIndices.length > 0 || result.changedIndices.length > 0) {
         console.log(`Found ${result.duplicateIndices.length} duplicate(s) and ${result.changedIndices.length} changed bookmark(s)`, result);
@@ -83,6 +271,7 @@ export default function Save() {
         setError(null);
         setDuplicateIndices(new Set()); // Reset duplicate indices
         setChangedIndices(new Set()); // Reset changed indices
+        setChangeDetails({}); // Reset change details
 
         console.log('Received bookmarks:', validBookmarks);
 
@@ -259,86 +448,32 @@ export default function Save() {
               {bookmarks.map((bookmark, index) => {
                 const isDuplicate = duplicateIndices.has(index);
                 const isChanged = changedIndices.has(index);
+                const isExpanded = expandedBookmarks.has(index);
+                const changeDetail = changeDetails[index];
+
+                const toggleExpand = () => {
+                  setExpandedBookmarks((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(index)) {
+                      next.delete(index);
+                    } else {
+                      next.add(index);
+                    }
+                    return next;
+                  });
+                };
+
                 return (
-                  <div
+                  <BookmarkItem
                     key={index}
-                    className={`border rounded-lg p-4 transition-colors ${
-                      isDuplicate
-                        ? 'border-amber-300 bg-amber-50 hover:bg-amber-100'
-                        : isChanged
-                        ? 'border-blue-300 bg-blue-50 hover:bg-blue-100'
-                        : 'border-gray-200 hover:bg-gray-50'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2 flex-wrap">
-                          <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-semibold rounded">
-                            {bookmark.platform.toUpperCase()}
-                          </span>
-                          {isDuplicate && (
-                            <span className="px-2 py-1 bg-amber-200 text-amber-800 text-xs font-semibold rounded flex items-center gap-1">
-                              <svg
-                                className="w-3 h-3"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                                />
-                              </svg>
-                              Duplicate
-                            </span>
-                          )}
-                          {isChanged && (
-                            <span className="px-2 py-1 bg-blue-200 text-blue-800 text-xs font-semibold rounded flex items-center gap-1">
-                              <svg
-                                className="w-3 h-3"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                                />
-                              </svg>
-                              Updated
-                            </span>
-                          )}
-                          {bookmark.author && (
-                            <span className="text-sm text-gray-600">@{bookmark.author}</span>
-                          )}
-                          {bookmark.timestamp && (
-                            <span className="text-xs text-gray-400">
-                              {new Date(bookmark.timestamp).toLocaleDateString()}
-                            </span>
-                          )}
-                        </div>
-        
-                        {bookmark.url && (
-                          <a
-                            href={bookmark.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:text-blue-800 text-sm break-all block mb-2"
-                          >
-                            {bookmark.url}
-                          </a>
-                        )}
-        
-                        {bookmark.text && (
-                          <p className="text-gray-700 text-sm line-clamp-3">{bookmark.text}</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+                    bookmark={bookmark}
+                    index={index}
+                    isDuplicate={isDuplicate}
+                    isChanged={isChanged}
+                    changeDetail={changeDetail}
+                    isExpanded={isExpanded}
+                    onToggleExpand={toggleExpand}
+                  />
                 );
               })}
             </div>
