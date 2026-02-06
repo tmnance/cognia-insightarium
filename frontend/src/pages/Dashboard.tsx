@@ -13,6 +13,7 @@ export default function Dashboard() {
   const [tags, setTags] = useState<Tag[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [showUntaggedOnly, setShowUntaggedOnly] = useState(false);
+  const [pinnedBookmarkIds, setPinnedBookmarkIds] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingTags, setIsLoadingTags] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -59,7 +60,12 @@ export default function Dashboard() {
     try {
       // Fetch the updated tags for this bookmark
       const updatedTags = await bookmarkApi.bookmarkTags.getByBookmarkId(bookmarkId);
-      
+
+      // If untagged filter is active, pin this bookmark so it stays visible
+      if (showUntaggedOnly) {
+        setPinnedBookmarkIds((prev) => new Set(prev).add(bookmarkId));
+      }
+
       // Update the bookmark in-place without reloading
       setAllBookmarks((prev) =>
         prev.map((bookmark) =>
@@ -79,7 +85,12 @@ export default function Dashboard() {
     try {
       // Fetch the updated tags for this bookmark
       const updatedTags = await bookmarkApi.bookmarkTags.getByBookmarkId(bookmarkId);
-      
+
+      // If tag filters are active, pin this bookmark so it stays visible
+      if (selectedTags.length > 0) {
+        setPinnedBookmarkIds((prev) => new Set(prev).add(bookmarkId));
+      }
+
       // Update the bookmark in-place without reloading
       setAllBookmarks((prev) =>
         prev.map((bookmark) =>
@@ -112,6 +123,8 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
+    // Clear pinned bookmarks when tag filters change
+    setPinnedBookmarkIds(new Set());
     loadBookmarks();
   }, [selectedTags]);
 
@@ -133,8 +146,22 @@ export default function Dashboard() {
     let filtered = [...allBookmarks];
 
     // Apply untagged filter (takes precedence over tag filters)
+    // Include pinned bookmarks that were visible when tags were added
     if (showUntaggedOnly) {
-      filtered = filtered.filter((bookmark) => !bookmark.tags || bookmark.tags.length === 0);
+      filtered = filtered.filter((bookmark) => 
+        !bookmark.tags || bookmark.tags.length === 0 || pinnedBookmarkIds.has(bookmark.id)
+      );
+    } else if (selectedTags.length > 0) {
+      // Apply tag filter - include bookmarks that match selected tags OR are pinned
+      filtered = filtered.filter((bookmark) => {
+        // If pinned, always include
+        if (pinnedBookmarkIds.has(bookmark.id)) {
+          return true;
+        }
+        // Otherwise, check if bookmark has any of the selected tags
+        const bookmarkTagSlugs = bookmark.tags?.map((tag) => tag.slug) || [];
+        return selectedTags.some((selectedSlug) => bookmarkTagSlugs.includes(selectedSlug));
+      });
     }
 
     // Apply text search filter
@@ -187,7 +214,7 @@ export default function Dashboard() {
     }
 
     return filtered;
-  }, [allBookmarks, searchQuery, sortField, sortDirection, showUntaggedOnly]);
+  }, [allBookmarks, searchQuery, sortField, sortDirection, showUntaggedOnly, pinnedBookmarkIds]);
 
   // Calculate untagged count
   const untaggedCount = useMemo(() => {
@@ -223,12 +250,14 @@ export default function Dashboard() {
     if (newValue) {
       setSelectedTags([]);
     }
+    setPinnedBookmarkIds(new Set());
     setCurrentPage(1);
   };
 
   const clearTagFilters = () => {
     setSelectedTags([]);
     setShowUntaggedOnly(false);
+    setPinnedBookmarkIds(new Set());
   };
 
   const clearSearch = () => {
