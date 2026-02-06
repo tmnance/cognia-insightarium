@@ -42,9 +42,6 @@ lerna-debug.log*
 *.sln
 *.sw?
 
-# Prisma
-backend/prisma/migrations/
-
 # Database backups
 backups/*.dump
 backups/*.sql
@@ -52,5 +49,3 @@ backups/*.sql.gz
 
 # Build outputs
 *.tsbuildinfo
-
-

@@ -230,6 +230,17 @@ export default function Dashboard() {
     }
   };
 
+  const handleBookmarkDeleted = async (bookmarkId: string) => {
+    // Remove bookmark from the list immediately for better UX
+    setAllBookmarks((prev) => prev.filter((bookmark) => bookmark.id !== bookmarkId));
+
+    // Update untagged count if needed
+    const deletedBookmark = allBookmarks.find(b => b.id === bookmarkId);
+    if (deletedBookmark && (!deletedBookmark.tags || deletedBookmark.tags.length === 0)) {
+      setUntaggedCount((prev) => Math.max(0, prev - 1));
+    }
+  };
+
   useEffect(() => {
     loadTags();
   }, []);
@@ -724,6 +735,7 @@ export default function Dashboard() {
           onTagClick={handleTagClick}
           onTagAdded={handleTagAdded}
           onTagRemoved={handleTagRemoved}
+          onBookmarkDeleted={handleBookmarkDeleted}
           allTags={tags}
         />
 

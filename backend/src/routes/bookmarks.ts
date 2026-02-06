@@ -122,7 +122,7 @@ function extractBookmarkData(item: BookmarkItemLike): { source: string; external
 /**
  * POST /api/bookmarks/check-duplicates
  * Check which items in the provided array are duplicates or have changed
- * 
+ *
  * Body: Array of bookmark items with platform, url, text, author, timestamp, etc.
  * Returns: Object with duplicateIndices and changedIndices arrays
  */
@@ -141,7 +141,13 @@ router.post('/check-duplicates', async (req: Request, res: Response) => {
 
     const duplicateIndices: number[] = [];
     const changedIndices: number[] = [];
-    const changeDetails: Record<number, { fields: string[] }> = {};
+    const changeDetails: Record<number, {
+      fields: string[];
+      existingContent?: string | null;
+      existingAuthor?: string | null;
+      newContent?: string | null;
+      newAuthor?: string | null;
+    }> = {};
 
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
@@ -158,10 +164,10 @@ router.post('/check-duplicates', async (req: Request, res: Response) => {
         // Check if anything has changed
         const newContent = item.text || null;
         const newAuthor = normalizeAuthor(item.author);
-        
+
         const contentChanged = newContent !== null && existing.content !== newContent;
         const authorChanged = newAuthor !== null && existing.author !== newAuthor;
-        
+
         if (contentChanged || authorChanged) {
           changedIndices.push(i);
           const changedFields: string[] = [];
@@ -200,7 +206,7 @@ router.post('/check-duplicates', async (req: Request, res: Response) => {
 /**
  * POST /api/bookmarks/bulk
  * Bulk save multiple bookmarks
- * 
+ *
  * Body: Array of bookmark items with platform, url, text, author, etc.
  */
 router.post('/bulk', async (req: Request, res: Response) => {
@@ -291,7 +297,9 @@ router.get('/', async (req: Request, res: Response) => {
   try {
     const { source, tags } = req.query;
 
-    const where: { source?: string; tags?: { some: { tag: { slug: { in: string[] } } } } } = {};
+    const where: { source?: string; tags?: { some: { tag: { slug: { in: string[] } } } }; deletedAt?: null } = {
+      deletedAt: null, // Only show non-deleted bookmarks
+    };
 
     if (source) {
       where.source = source as string;
@@ -345,6 +353,54 @@ router.get('/', async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       error: 'Failed to fetch bookmarks',
+    });
+  }
+});
+
+/**
+ * DELETE /api/bookmarks/:id
+ * Soft delete a bookmark (sets deletedAt timestamp)
+ */
+router.delete('/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const bookmark = await prisma.bookmark.findUnique({
+      where: { id },
+    });
+
+    if (!bookmark) {
+      return res.status(404).json({
+        success: false,
+        error: 'Bookmark not found',
+      });
+    }
+
+    if (bookmark.deletedAt) {
+      return res.status(400).json({
+        success: false,
+        error: 'Bookmark is already deleted',
+      });
+    }
+
+    const deleted = await prisma.bookmark.update({
+      where: { id },
+      data: {
+        deletedAt: new Date(),
+      },
+    });
+
+    logger.info('Soft deleted bookmark', { id });
+
+    return res.json({
+      success: true,
+      bookmark: deleted,
+    });
+  } catch (error) {
+    logger.error('Error deleting bookmark', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to delete bookmark',
     });
   }
 });
@@ -486,7 +542,7 @@ router.delete('/:id/tags/:tagId', async (req: Request, res: Response) => {
 router.get('/llm-tagging/stats', async (_req: Request, res: Response) => {
   try {
     const { getUntaggedBookmarkCount, getTotalBookmarkCount } = await import('../services/promptGeneration');
-    
+
     const totalUntagged = await getUntaggedBookmarkCount();
     const totalBookmarks = await getTotalBookmarkCount();
 
@@ -513,7 +569,7 @@ router.get('/llm-tagging/prompt', async (req: Request, res: Response) => {
   try {
     const limit = parseInt(req.query.limit as string) || 20;
     const { generateTaggingPrompt } = await import('../services/promptGeneration');
-    
+
     const result = await generateTaggingPrompt(limit);
 
     return res.json({
@@ -532,7 +588,7 @@ router.get('/llm-tagging/prompt', async (req: Request, res: Response) => {
       const { getUntaggedBookmarkCount, getTotalBookmarkCount } = await import('../services/promptGeneration');
       const totalUntagged = await getUntaggedBookmarkCount();
       const totalBookmarks = await getTotalBookmarkCount();
-      
+
       return res.json({
         success: true,
         prompt: '',
@@ -543,7 +599,7 @@ router.get('/llm-tagging/prompt', async (req: Request, res: Response) => {
         totalBookmarkCount: totalBookmarks,
       });
     }
-    
+
     logger.error('Error generating tagging prompt', error);
     return res.status(500).json({
       success: false,

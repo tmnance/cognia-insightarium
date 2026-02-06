@@ -17,7 +17,7 @@ export interface BookmarkData {
  */
 export async function findExistingBookmark(data: BookmarkData) {
   try {
-    // First, try to find by externalId if provided
+    // First, try to find by externalId if provided (including deleted bookmarks)
     if (data.externalId && data.source) {
       const byExternalId = await prisma.bookmark.findUnique({
         where: {
@@ -32,12 +32,13 @@ export async function findExistingBookmark(data: BookmarkData) {
         logger.debug('Found existing bookmark by externalId', {
           source: data.source,
           externalId: data.externalId,
+          deleted: !!byExternalId.deletedAt,
         });
         return byExternalId;
       }
     }
 
-    // Fallback to URL if provided
+    // Fallback to URL if provided (including deleted bookmarks)
     if (data.url) {
       const byUrl = await prisma.bookmark.findFirst({
         where: {
@@ -46,7 +47,7 @@ export async function findExistingBookmark(data: BookmarkData) {
       });
 
       if (byUrl) {
-        logger.debug('Found existing bookmark by URL', { url: data.url });
+        logger.debug('Found existing bookmark by URL', { url: data.url, deleted: !!byUrl.deletedAt });
         return byUrl;
       }
     }
@@ -107,7 +108,16 @@ export async function createBookmarkIfNotExists(data: BookmarkData) {
     : null;
 
   if (existing) {
-    // Update lastIngestedAt for existing bookmark
+    // If bookmark is deleted, return it without updating (don't create, don't undelete)
+    if (existing.deletedAt) {
+      logger.info('Bookmark exists but is deleted, skipping', {
+        id: existing.id,
+        source: data.source,
+      });
+      return existing;
+    }
+
+    // Update lastIngestedAt for existing non-deleted bookmark
     // Also update sourceCreatedAt if it's not set and we have a value
     const updateData: Prisma.BookmarkUpdateInput = {
       lastIngestedAt: now,
@@ -150,5 +160,3 @@ export async function createBookmarkIfNotExists(data: BookmarkData) {
     throw error;
   }
 }
-
-

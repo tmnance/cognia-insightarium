@@ -84,6 +84,14 @@ export const bookmarkApi = {
     return response.data.bookmark;
   },
 
+  // Delete bookmark (soft delete)
+  delete: async (bookmarkId: string): Promise<void> => {
+    const response = await api.delete<ApiResponse<Bookmark>>(`/bookmarks/${bookmarkId}`);
+    if (!response.data.success) {
+      throw new Error(response.data.error || 'Failed to delete bookmark');
+    }
+  },
+
   // Bulk save bookmarks
   bulkSave: async (items: Array<{ platform: string; url?: string; text?: string; author?: string; timestamp?: string }>): Promise<{ saved: number; failed: number; bookmarks: Bookmark[] }> => {
     const response = await api.post<{ success: boolean; saved: number; failed: number; bookmarks: Bookmark[]; errors?: Array<{ item: unknown; error: string }> }>('/bookmarks/bulk', items);

@@ -20,6 +20,7 @@ model Bookmark {
   sourceCreatedAt DateTime? // When content was posted/created on the originating platform
   firstIngestedAt DateTime? // First time the system fetched this content
   lastIngestedAt  DateTime? // Most recent successful ingestion
+  deletedAt       DateTime? // Soft delete timestamp (null = not deleted)
 
   tags            BookmarkTag[]
 
