@@ -12,6 +12,7 @@ export default function Dashboard() {
   const [allBookmarks, setAllBookmarks] = useState<Bookmark[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [showUntaggedOnly, setShowUntaggedOnly] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingTags, setIsLoadingTags] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -131,6 +132,11 @@ export default function Dashboard() {
   const filteredAndSortedBookmarks = useMemo(() => {
     let filtered = [...allBookmarks];
 
+    // Apply untagged filter (takes precedence over tag filters)
+    if (showUntaggedOnly) {
+      filtered = filtered.filter((bookmark) => !bookmark.tags || bookmark.tags.length === 0);
+    }
+
     // Apply text search filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
@@ -181,7 +187,12 @@ export default function Dashboard() {
     }
 
     return filtered;
-  }, [allBookmarks, searchQuery, sortField, sortDirection]);
+  }, [allBookmarks, searchQuery, sortField, sortDirection, showUntaggedOnly]);
+
+  // Calculate untagged count
+  const untaggedCount = useMemo(() => {
+    return allBookmarks.filter((bookmark) => !bookmark.tags || bookmark.tags.length === 0).length;
+  }, [allBookmarks]);
 
   // Pagination
   const totalPages = Math.ceil(filteredAndSortedBookmarks.length / itemsPerPage);
@@ -192,6 +203,10 @@ export default function Dashboard() {
   }, [filteredAndSortedBookmarks, currentPage, itemsPerPage]);
 
   const handleTagClick = (tag: Tag) => {
+    // If clicking a tag, disable untagged filter
+    if (showUntaggedOnly) {
+      setShowUntaggedOnly(false);
+    }
     setSelectedTags((prev) => {
       if (prev.includes(tag.slug)) {
         return prev.filter((slug) => slug !== tag.slug);
@@ -201,8 +216,19 @@ export default function Dashboard() {
     });
   };
 
+  const handleUntaggedToggle = () => {
+    const newValue = !showUntaggedOnly;
+    setShowUntaggedOnly(newValue);
+    // If enabling untagged filter, clear tag selections
+    if (newValue) {
+      setSelectedTags([]);
+    }
+    setCurrentPage(1);
+  };
+
   const clearTagFilters = () => {
     setSelectedTags([]);
+    setShowUntaggedOnly(false);
   };
 
   const clearSearch = () => {
@@ -227,7 +253,7 @@ export default function Dashboard() {
     setCurrentPage(1);
   };
 
-  const hasActiveFilters = searchQuery.trim() || selectedTags.length > 0;
+  const hasActiveFilters = searchQuery.trim() || selectedTags.length > 0 || showUntaggedOnly;
 
   const SortButton = ({ field, label }: { field: SortField; label: string }) => {
     const isActive = sortField === field;
@@ -378,12 +404,12 @@ export default function Dashboard() {
         <div className="bg-white rounded-lg shadow-md p-4 mb-6">
           <div className="flex items-center justify-between mb-3">
             <label className="text-sm font-medium text-gray-700">Filter by Tags</label>
-            {selectedTags.length > 0 && (
+            {(selectedTags.length > 0 || showUntaggedOnly) && (
               <button
                 onClick={clearTagFilters}
                 className="text-sm text-blue-600 hover:text-blue-800 font-medium"
               >
-                Clear ({selectedTags.length})
+                Clear ({selectedTags.length + (showUntaggedOnly ? 1 : 0)})
               </button>
             )}
           </div>
@@ -395,7 +421,7 @@ export default function Dashboard() {
           ) : tags.length === 0 ? (
             <p className="text-gray-500 text-sm">No tags available yet</p>
           ) : (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {tags.map((tag) => {
                 const isSelected = selectedTags.includes(tag.slug);
                 const tagStyle = tag.color
@@ -411,6 +437,8 @@ export default function Dashboard() {
                     key={tag.id}
                     onClick={() => handleTagClick(tag)}
                     className={`px-3 py-1.5 rounded-md text-sm font-medium border transition-colors ${
+                      showUntaggedOnly ? 'opacity-50' : ''
+                    } ${
                       isSelected ? 'ring-2 ring-offset-1' : ''
                     } ${
                       tag.color && isSelected
@@ -431,6 +459,24 @@ export default function Dashboard() {
                   </button>
                 );
               })}
+              {tags.length > 0 && (
+                <div className="h-6 w-px bg-gray-300"></div>
+              )}
+              {/* Untagged Filter Button */}
+              <button
+                onClick={handleUntaggedToggle}
+                className={`px-3 py-1.5 rounded-md text-sm font-semibold border-2 transition-all ${
+                  showUntaggedOnly ? 'ring-2 ring-offset-1 ring-gray-400' : ''
+                } ${
+                  showUntaggedOnly
+                    ? 'bg-gray-700 text-white border-gray-700 shadow-md shadow-gray-500/30'
+                    : 'bg-gray-50 text-gray-600 border-gray-400 hover:bg-gray-100 hover:border-gray-500'
+                }`}
+                title={`Show only bookmarks with no tags (${untaggedCount} bookmarks)`}
+              >
+                Untagged
+                <span className="ml-1 opacity-75">({untaggedCount})</span>
+              </button>
             </div>
           )}
         </div>
@@ -455,6 +501,7 @@ export default function Dashboard() {
                   onClick={() => {
                     clearSearch();
                     clearTagFilters();
+                    setShowUntaggedOnly(false);
                   }}
                   className="ml-2 text-blue-600 hover:text-blue-800 underline"
                 >
