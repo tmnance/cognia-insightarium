@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Bookmark, Tag, bookmarkApi, configApi, SavedBookmarkUrl } from '../services/api';
 import BookmarkList from '../components/BookmarkList';
 import AddBookmarkForm from '../components/AddBookmarkForm';
@@ -9,6 +9,7 @@ type SortDirection = 'asc' | 'desc';
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [allBookmarks, setAllBookmarks] = useState<Bookmark[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -21,6 +22,7 @@ export default function Dashboard() {
   const [savedBookmarkUrls, setSavedBookmarkUrls] = useState<SavedBookmarkUrl[]>([]);
   const [syncDropdownOpen, setSyncDropdownOpen] = useState(false);
   const syncDropdownRef = useRef<HTMLDivElement>(null);
+  const isInitializingFromUrl = useRef(true);
 
   // Filtering, sorting, and pagination state
   const [searchQuery, setSearchQuery] = useState('');
@@ -28,6 +30,81 @@ export default function Dashboard() {
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
+  
+  // Initialize state from URL params on mount
+  useEffect(() => {
+    const q = searchParams.get('q') || searchParams.get('search') || '';
+    const tagsParam = searchParams.get('tags');
+    const untaggedParam = searchParams.get('untagged');
+    const sortParam = searchParams.get('sort');
+    const orderParam = searchParams.get('order');
+    const pageParam = searchParams.get('page');
+
+    if (q) setSearchQuery(q);
+    if (tagsParam) {
+      setSelectedTags(tagsParam.split(',').filter(Boolean));
+    }
+    if (untaggedParam === 'true' || untaggedParam === '1') {
+      setShowUntaggedOnly(true);
+    }
+    if (sortParam === 'sourceCreatedAt' || sortParam === 'createdAt' || sortParam === 'lastIngestedAt') {
+      setSortField(sortParam);
+    }
+    if (orderParam === 'asc' || orderParam === 'desc') {
+      setSortDirection(orderParam);
+    }
+    if (pageParam) {
+      const page = parseInt(pageParam, 10);
+      if (!isNaN(page) && page > 0) {
+        setCurrentPage(page);
+      }
+    }
+    
+    // Mark initialization as complete after a brief delay to allow state updates
+    setTimeout(() => {
+      isInitializingFromUrl.current = false;
+    }, 100);
+  }, []); // Only run on mount
+
+  // Update URL params when state changes (using replace to avoid cluttering history)
+  useEffect(() => {
+    // Skip updating URL during initialization to avoid conflicts
+    if (isInitializingFromUrl.current) {
+      return;
+    }
+    
+    const params = new URLSearchParams();
+    
+    if (searchQuery.trim()) {
+      params.set('q', searchQuery.trim());
+    }
+    
+    if (selectedTags.length > 0) {
+      params.set('tags', selectedTags.join(','));
+    }
+    
+    if (showUntaggedOnly) {
+      params.set('untagged', 'true');
+    }
+    
+    // Only include sort/order params if they differ from defaults
+    if (sortField && (sortField !== 'sourceCreatedAt' || sortDirection !== 'desc')) {
+      params.set('sort', sortField);
+      params.set('order', sortDirection);
+    }
+    
+    if (currentPage > 1) {
+      params.set('page', currentPage.toString());
+    }
+    
+    // Build new params string and compare with current URL
+    const newParams = params.toString();
+    const currentParams = window.location.search.substring(1); // Remove leading '?'
+    
+    if (currentParams !== newParams) {
+      setSearchParams(params, { replace: true });
+    }
+  }, [searchQuery, selectedTags, showUntaggedOnly, sortField, sortDirection, currentPage, setSearchParams]);
 
   const loadTags = async () => {
     try {
