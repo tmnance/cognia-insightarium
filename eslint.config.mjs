@@ -43,6 +43,8 @@ export default defineConfig([
     rules: {
       "@typescript-eslint/explicit-function-return-type": "off",
       "@typescript-eslint/no-explicit-any": "warn",
+      "no-trailing-spaces": "warn",
+      "eol-last": ["warn", "always"],
     },
   },
   ...frontendCompat,
@@ -61,6 +63,8 @@ export default defineConfig([
     rules: {
       "@typescript-eslint/explicit-function-return-type": "off",
       "@typescript-eslint/no-explicit-any": "warn",
+      "no-trailing-spaces": "warn",
+      "eol-last": ["warn", "always"],
       "react-refresh/only-export-components": [
         "warn",
         { allowConstantExport: true },

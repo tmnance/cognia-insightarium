@@ -11,6 +11,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [allBookmarks, setAllBookmarks] = useState<Bookmark[]>([]);
+  const [untaggedCount, setUntaggedCount] = useState<number>(0);
   const [tags, setTags] = useState<Tag[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [showUntaggedOnly, setShowUntaggedOnly] = useState(false);
@@ -30,7 +31,7 @@ export default function Dashboard() {
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
-  
+
   // Initialize state from URL params on mount
   useEffect(() => {
     const q = searchParams.get('q') || searchParams.get('search') || '';
@@ -59,7 +60,7 @@ export default function Dashboard() {
         setCurrentPage(page);
       }
     }
-    
+
     // Mark initialization as complete after a brief delay to allow state updates
     setTimeout(() => {
       isInitializingFromUrl.current = false;
@@ -72,35 +73,35 @@ export default function Dashboard() {
     if (isInitializingFromUrl.current) {
       return;
     }
-    
+
     const params = new URLSearchParams();
-    
+
     if (searchQuery.trim()) {
       params.set('q', searchQuery.trim());
     }
-    
+
     if (selectedTags.length > 0) {
       params.set('tags', selectedTags.join(','));
     }
-    
+
     if (showUntaggedOnly) {
       params.set('untagged', 'true');
     }
-    
+
     // Only include sort/order params if they differ from defaults
     if (sortField && (sortField !== 'sourceCreatedAt' || sortDirection !== 'desc')) {
       params.set('sort', sortField);
       params.set('order', sortDirection);
     }
-    
+
     if (currentPage > 1) {
       params.set('page', currentPage.toString());
     }
-    
+
     // Build new params string and compare with current URL
     const newParams = params.toString();
     const currentParams = window.location.search.substring(1); // Remove leading '?'
-    
+
     if (currentParams !== newParams) {
       setSearchParams(params, { replace: true });
     }
@@ -123,8 +124,26 @@ export default function Dashboard() {
       setIsLoading(true);
       setError(null);
       const tagSlugs = selectedTags.length > 0 ? selectedTags : undefined;
+
+      // Fetch filtered bookmarks for display
       const data = await bookmarkApi.getAll(undefined, tagSlugs);
       setAllBookmarks(data);
+
+      // Calculate untagged count efficiently:
+      // - When no tags selected: calculate from current data (already unfiltered)
+      // - When tags selected: fetch unfiltered, calculate count, then discard data
+      if (selectedTags.length === 0) {
+        // When no tags selected, filtered and unfiltered are the same
+        const count = data.filter((bookmark) => !bookmark.tags || bookmark.tags.length === 0).length;
+        setUntaggedCount(count);
+      } else {
+        // When tags are selected, fetch unfiltered only to calculate count
+        const unfilteredData = await bookmarkApi.getAll(undefined, undefined);
+        const count = unfilteredData.filter((bookmark) => !bookmark.tags || bookmark.tags.length === 0).length;
+        setUntaggedCount(count);
+        // Don't store unfilteredData - we only needed it for the count
+      }
+
       setCurrentPage(1); // Reset to first page when filters change
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load bookmarks');
@@ -151,6 +170,20 @@ export default function Dashboard() {
             : bookmark
         )
       );
+
+      // Update untagged count if no tags are selected (bookmark is in allBookmarks)
+      // When tags are selected, reload to get accurate count
+      if (selectedTags.length === 0) {
+        const bookmark = allBookmarks.find(b => b.id === bookmarkId);
+        const wasUntagged = !bookmark?.tags || bookmark.tags.length === 0;
+        const isNowUntagged = !updatedTags || updatedTags.length === 0;
+        if (wasUntagged !== isNowUntagged) {
+          setUntaggedCount((prev) => isNowUntagged ? prev + 1 : prev - 1);
+        }
+      } else {
+        // Reload to get accurate count when tags are filtered
+        loadBookmarks();
+      }
     } catch (error) {
       console.error('Failed to fetch updated tags:', error);
       // Fallback to full reload if in-place update fails
@@ -176,6 +209,20 @@ export default function Dashboard() {
             : bookmark
         )
       );
+
+      // Update untagged count if no tags are selected (bookmark is in allBookmarks)
+      // When tags are selected, reload to get accurate count
+      if (selectedTags.length === 0) {
+        const bookmark = allBookmarks.find(b => b.id === bookmarkId);
+        const wasUntagged = !bookmark?.tags || bookmark.tags.length === 0;
+        const isNowUntagged = !updatedTags || updatedTags.length === 0;
+        if (wasUntagged !== isNowUntagged) {
+          setUntaggedCount((prev) => isNowUntagged ? prev + 1 : prev - 1);
+        }
+      } else {
+        // Reload to get accurate count when tags are filtered
+        loadBookmarks();
+      }
     } catch (error) {
       console.error('Failed to fetch updated tags:', error);
       // Fallback to full reload if in-place update fails
@@ -225,7 +272,7 @@ export default function Dashboard() {
     // Apply untagged filter (takes precedence over tag filters)
     // Include pinned bookmarks that were visible when tags were added
     if (showUntaggedOnly) {
-      filtered = filtered.filter((bookmark) => 
+      filtered = filtered.filter((bookmark) =>
         !bookmark.tags || bookmark.tags.length === 0 || pinnedBookmarkIds.has(bookmark.id)
       );
     } else if (selectedTags.length > 0) {
@@ -293,10 +340,6 @@ export default function Dashboard() {
     return filtered;
   }, [allBookmarks, searchQuery, sortField, sortDirection, showUntaggedOnly, pinnedBookmarkIds]);
 
-  // Calculate untagged count
-  const untaggedCount = useMemo(() => {
-    return allBookmarks.filter((bookmark) => !bookmark.tags || bookmark.tags.length === 0).length;
-  }, [allBookmarks]);
 
   // Pagination
   const totalPages = Math.ceil(filteredAndSortedBookmarks.length / itemsPerPage);
