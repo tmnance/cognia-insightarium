@@ -6,7 +6,7 @@ import bookmarkRoutes from './routes/bookmarks';
 import configRoutes from './routes/config';
 import contentRoutes from './routes/content';
 import tagRoutes from './routes/tags';
-import { initializeDefaultTags } from './services/tagService';
+import { initializeDefaultTagsIfNone } from './services/tagService';
 
 const app = express();
 
@@ -53,9 +53,9 @@ const PORT = config.port;
 // Initialize default tags on server startup
 (async () => {
   try {
-    logger.info('Initializing default tags...');
-    await initializeDefaultTags();
-    logger.info('Default tags initialized successfully');
+    logger.info('Initializing default tag handling...');
+    await initializeDefaultTagsIfNone();
+    logger.info('Default tag handling completed');
   } catch (error) {
     logger.error('Failed to initialize default tags', error);
     // Don't fail server startup if tag initialization fails

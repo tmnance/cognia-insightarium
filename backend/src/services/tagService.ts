@@ -1,17 +1,13 @@
 /**
  * Tag Service
- * 
+ *
  * Manages tags and bookmark-tag relationships
  */
 
 import { Tag } from '@prisma/client';
 import { prisma } from '../db/prismaClient';
 import { logger } from '../utils/logger';
-import {
-  findTagsByKeywords,
-  getAllDefaultTagDefinitions,
-  getTagDefinitionBySlug,
-} from './tagCategorization';
+import { getAllDefaultTagDefinitions } from './tagDefinitions';
 
 export interface TagWithCount {
   id: string;
@@ -123,20 +119,14 @@ export async function getOrCreateTag(
 }
 
 /**
- * Initialize default tags in the database (only creates missing; never updates existing).
- * Uses one query to determine which default tags don't exist, then createMany for any missing.
+ * Initialize default tags in the database (if none exist).
  */
-export async function initializeDefaultTags() {
+export async function initializeDefaultTagsIfNone() {
   try {
-    const existingTags = await prisma.tag.findMany();
+    const existingTags = await getAllTagsWithCounts();
     if (existingTags.length > 0) {
-      logger.info('Tag initialization completed', { created: 0, existing: existingTags.length });
-      return {
-        created: 0,
-        existing: existingTags.length,
-        createdTags: [],
-        existingTags: existingTags.map((t) => t.name),
-      };
+      logger.info('Tags already exist, skipping initialization');
+      return;
     }
 
     const toCreate = getAllDefaultTagDefinitions();
@@ -165,108 +155,6 @@ export async function initializeDefaultTags() {
     };
   } catch (error) {
     logger.error('Error initializing default tags', error);
-    throw error;
-  }
-}
-
-/**
- * Automatically tag a bookmark based on its content
- */
-export async function autoTagBookmark(
-  bookmarkId: string,
-  content: string | null | undefined
-) {
-  try {
-    // Find matching tags based on keywords
-    const tagMatches = findTagsByKeywords(content);
-
-    if (tagMatches.length === 0) {
-      logger.debug('No tags matched for bookmark', { bookmarkId });
-      return [];
-    }
-
-    // Get tag definitions to map slugs to tag data
-    const appliedTags = [];
-
-    for (const match of tagMatches) {
-      try {
-        // Get or create tag
-        const tagDef = getTagDefinitionBySlug(match.tagSlug);
-        if (!tagDef) {
-          logger.warn('Tag definition not found', { slug: match.tagSlug });
-          continue;
-        }
-
-        const tag = await getOrCreateTag(
-          tagDef.name,
-          tagDef.slug,
-          tagDef.description,
-          tagDef.color
-        );
-
-        // Check if bookmark-tag relationship already exists
-        const existing = await prisma.bookmarkTag.findUnique({
-          where: {
-            bookmarkId_tagId: {
-              bookmarkId,
-              tagId: tag.id,
-            },
-          },
-        });
-
-        if (existing) {
-          // Update if it wasn't auto-tagged before (user might have added manually)
-          if (!existing.autoTagged) {
-            await prisma.bookmarkTag.update({
-              where: { id: existing.id },
-              data: {
-                autoTagged: true,
-                confidence: match.confidence,
-              },
-            });
-          } else if (
-            existing.confidence === null ||
-            existing.confidence < match.confidence
-          ) {
-            // Update confidence if higher
-            await prisma.bookmarkTag.update({
-              where: { id: existing.id },
-              data: {
-                confidence: match.confidence,
-              },
-            });
-          }
-          appliedTags.push({ tag, confidence: match.confidence });
-        } else {
-          // Create new bookmark-tag relationship
-          await prisma.bookmarkTag.create({
-            data: {
-              bookmarkId,
-              tagId: tag.id,
-              autoTagged: true,
-              confidence: match.confidence,
-            },
-          });
-          appliedTags.push({ tag, confidence: match.confidence });
-        }
-      } catch (error) {
-        logger.error('Error applying tag to bookmark', {
-          error,
-          bookmarkId,
-          tagSlug: match.tagSlug,
-        });
-      }
-    }
-
-    logger.info('Auto-tagged bookmark', {
-      bookmarkId,
-      tagCount: appliedTags.length,
-      tags: appliedTags.map(t => t.tag.name),
-    });
-
-    return appliedTags;
-  } catch (error) {
-    logger.error('Error auto-tagging bookmark', { error, bookmarkId });
     throw error;
   }
 }
@@ -446,4 +334,3 @@ export async function getTagById(id: string) {
     throw error;
   }
 }
-
