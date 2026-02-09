@@ -22,3 +22,12 @@ export const createTagSchema = z.object({
 });
 
 export type CreateTagInput = z.infer<typeof createTagSchema>;
+
+export const updateTagSchema = z.object({
+  name: z.string().min(1, 'Name is required').max(100).optional(),
+  slug: slugSchema.optional(),
+  description: z.string().max(500).optional().nullable(),
+  color: hexColorSchema,
+});
+
+export type UpdateTagInput = z.infer<typeof updateTagSchema>;

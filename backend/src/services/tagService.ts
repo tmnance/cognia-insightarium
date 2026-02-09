@@ -249,6 +249,50 @@ export async function addTagToBookmark(
 }
 
 /**
+ * Add a tag to multiple bookmarks
+ */
+export async function addTagToBookmarks(
+  bookmarkIds: string[],
+  tagId: string,
+) {
+  try {
+    // Check if relationships already exists
+    const existingBookmarkIds = await prisma.bookmarkTag.findMany({
+      where: {
+        bookmarkId: { in: bookmarkIds },
+        tagId,
+      },
+    }).then(result => new Set(result.map(r => r.bookmarkId)));
+    const bookmarkIdsToUpdate = bookmarkIds.filter(id => !existingBookmarkIds.has(id));
+
+    if (bookmarkIdsToUpdate.length === 0) {
+      logger.info('No bookmarks to update', { bookmarkIds, tagId });
+      return 0;
+    }
+
+    // add tag to bookmarks in a single transaction
+    await prisma.bookmarkTag.createMany({
+      data: bookmarkIdsToUpdate.map(bookmarkId => ({
+        bookmarkId,
+        tagId,
+        autoTagged: false,
+        confidence: null,
+      })),
+    });
+
+    logger.info('Added tag to bookmarks', {
+      bookmarkIds: bookmarkIdsToUpdate,
+      tagId,
+    });
+
+    return bookmarkIdsToUpdate.length;
+  } catch (error) {
+    logger.error('Error adding tag to bookmarks', { error, bookmarkIds, tagId });
+    throw error;
+  }
+}
+
+/**
  * Remove a tag from a bookmark
  */
 export async function removeTagFromBookmark(bookmarkId: string, tagId: string) {
@@ -331,6 +375,136 @@ export async function getTagById(id: string) {
     });
   } catch (error) {
     logger.error('Error getting tag by ID', { error, id });
+    throw error;
+  }
+}
+
+/**
+ * Update a tag by ID. Throws if slug or name conflicts with another tag.
+ */
+export async function updateTag(
+  id: string,
+  name?: string,
+  slug?: string,
+  description?: string | null,
+  color?: string | null
+) {
+  try {
+    const tag = await prisma.tag.findUnique({ where: { id } });
+    if (!tag) {
+      throw new Error('Tag not found');
+    }
+
+    // Check for conflicts if slug or name is being changed
+    if (slug && slug !== tag.slug) {
+      const existingBySlug = await prisma.tag.findUnique({
+        where: { slug },
+      });
+      if (existingBySlug) {
+        throw new Error(`A tag with slug "${slug}" already exists`);
+      }
+    }
+
+    if (name && name !== tag.name) {
+      const existingByName = await prisma.tag.findUnique({
+        where: { name },
+      });
+      if (existingByName) {
+        throw new Error(`A tag with name "${name}" already exists`);
+      }
+    }
+
+    const updated = await prisma.tag.update({
+      where: { id },
+      data: {
+        ...(name !== undefined && { name }),
+        ...(slug !== undefined && { slug }),
+        ...(description !== undefined && { description: description ?? null }),
+        ...(color !== undefined && { color: color ?? null }),
+      },
+    });
+
+    logger.info('Updated tag', { id, name: updated.name, slug: updated.slug });
+    return updated;
+  } catch (error) {
+    if (error instanceof Error && (error.message.includes('already exists') || error.message.includes('not found'))) {
+      throw error;
+    }
+    logger.error('Error updating tag', { error, id });
+    throw error;
+  }
+}
+
+/**
+ * Delete a tag by ID. Returns the number of bookmarks that had this tag.
+ */
+export async function deleteTag(id: string) {
+  try {
+    const tag = await prisma.tag.findUnique({ where: { id } });
+    if (!tag) {
+      throw new Error('Tag not found');
+    }
+
+    // Get count of bookmarks with this tag before deletion
+    const bookmarkCount = await prisma.bookmarkTag.count({
+      where: { tagId: id },
+    });
+
+    // Delete the tag (cascade will remove bookmark-tag relationships)
+    await prisma.tag.delete({
+      where: { id },
+    });
+
+    logger.info('Deleted tag', { id, name: tag.name, bookmarkCount });
+    return bookmarkCount;
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('not found')) {
+      throw error;
+    }
+    logger.error('Error deleting tag', { error, id });
+    throw error;
+  }
+}
+
+/**
+ * Copy tag assignment: add From tag to every bookmark that has the To tag.
+ * Does not remove any tags. Returns the number of bookmarks that received the new tag
+ * (may be less than To tag count if some already had the From tag).
+ */
+export async function copyTagAssignment(fromTagId: string, toTagId: string) {
+  try {
+    const fromTag = await prisma.tag.findUnique({ where: { id: fromTagId } });
+    const toTag = await prisma.tag.findUnique({ where: { id: toTagId } });
+    if (!fromTag) throw new Error('From tag not found');
+    if (!toTag) throw new Error('To tag not found');
+    if (fromTagId === toTagId) {
+      throw new Error('From and To tag must be different');
+    }
+
+    // Find all bookmarks that have the To tag and not the From tag
+    const bookmarkIdsToUpdate = await prisma.bookmarkTag.findMany({
+      where: { tagId: toTagId, NOT: { tagId: fromTagId } },
+      select: { bookmarkId: true },
+    }).then(result => new Set(result.map(r => r.bookmarkId)));
+
+    // Add the From tag to each bookmark that has the To tag
+    const added = await addTagToBookmarks(Array.from(bookmarkIdsToUpdate), fromTagId);
+
+    logger.info('Copy tag assignment', {
+      fromTagId,
+      toTagId,
+      bookmarksWithToTag: bookmarkIdsToUpdate.size,
+      added,
+    });
+    return { bookmarksUpdated: added, bookmarksWithToTag: bookmarkIdsToUpdate.size };
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      (error.message.includes('not found') || error.message.includes('must be different'))
+    ) {
+      throw error;
+    }
+    logger.error('Error copying tag assignment', { error, fromTagId, toTagId });
     throw error;
   }
 }

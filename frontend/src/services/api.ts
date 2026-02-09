@@ -157,6 +157,49 @@ export const bookmarkApi = {
       }
       return response.data.tag;
     },
+    // Update a tag by ID
+    update: async (
+      id: string,
+      data: {
+        name?: string;
+        slug?: string;
+        description?: string | null;
+        color?: string | null;
+      }
+    ): Promise<Tag> => {
+      const response = await api.put<{ success: boolean; tag: Tag; error?: string }>(`/tags/${id}`, data);
+      if (!response.data.tag) {
+        throw new Error(response.data.error || 'Failed to update tag');
+      }
+      return response.data.tag;
+    },
+    // Delete a tag by ID
+    delete: async (id: string): Promise<{ bookmarkCount: number }> => {
+      const response = await api.delete<{ success: boolean; bookmarkCount: number; error?: string }>(`/tags/${id}`);
+      if (!response.data.success) {
+        throw new Error(response.data.error || 'Failed to delete tag');
+      }
+      return { bookmarkCount: response.data.bookmarkCount };
+    },
+    // Copy tag assignment: add From tag to every bookmark that has the To tag
+    copyAssignment: async (
+      fromTagId: string,
+      toTagId: string
+    ): Promise<{ bookmarksUpdated: number; bookmarksWithDestination: number }> => {
+      const response = await api.post<{
+        success: boolean;
+        bookmarksUpdated: number;
+        bookmarksWithDestination: number;
+        error?: string;
+      }>(`/tags/${fromTagId}/copy-assignment`, { toTagId });
+      if (!response.data.success) {
+        throw new Error(response.data.error || 'Failed to copy tag assignment');
+      }
+      return {
+        bookmarksUpdated: response.data.bookmarksUpdated,
+        bookmarksWithDestination: response.data.bookmarksWithDestination,
+      };
+    },
   },
 
   // Bookmark tag management
