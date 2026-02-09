@@ -16,9 +16,11 @@ export default function Tagging() {
   const [totalUntaggedCount, setTotalUntaggedCount] = useState<number>(0);
   const [totalBookmarkCount, setTotalBookmarkCount] = useState<number>(0);
   const [llmBookmarkCategorizationUrl, setLlmBookmarkCategorizationUrl] = useState<string>('');
+  const [llmEnabled, setLlmEnabled] = useState<boolean>(false);
   const [llmResponse, setLlmResponse] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
+  const [isAutoTagging, setIsAutoTagging] = useState(false);
   const [isLoadingStats, setIsLoadingStats] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -34,6 +36,7 @@ export default function Tagging() {
         setTotalUntaggedCount(stats.totalUntaggedCount);
         setTotalBookmarkCount(stats.totalBookmarkCount);
         setLlmBookmarkCategorizationUrl(stats.llmBookmarkCategorizationUrl);
+        setLlmEnabled(stats.llmEnabled);
       } catch (err) {
         console.error('Failed to load tagging stats:', err);
         // Don't show error to user for stats loading failure
@@ -63,11 +66,11 @@ export default function Tagging() {
       setLlmResponse('');
 
       const result = await bookmarkApi.tagging.generatePrompt(limit);
-      
+
       // Update stats from result
       setTotalUntaggedCount(result.totalUntaggedCount);
       setTotalBookmarkCount(result.totalBookmarkCount);
-      
+
       // Check if there are bookmarks to tag
       if (result.bookmarkCount === 0) {
         setError('No untagged bookmarks found to process. All bookmarks have been reviewed.');
@@ -83,6 +86,42 @@ export default function Tagging() {
       setError(err instanceof Error ? err.message : 'Failed to generate prompt');
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const handleAutoTag = async () => {
+    try {
+      setIsAutoTagging(true);
+      setError(null);
+      setSuccess(null);
+
+      const result = await bookmarkApi.tagging.autoTag(limit);
+
+      let message = `Successfully processed ${result.processed} bookmark(s) and tagged ${result.tagged} bookmark(s).`;
+      if (result.errors && result.errors.length > 0) {
+        message += ` ${result.errors.length} error(s) occurred.`;
+      }
+
+      setSuccess(message);
+      setTotalUntaggedCount(result.totalUntaggedCount);
+      setTotalBookmarkCount(result.totalBookmarkCount);
+
+      try {
+        const stats = await bookmarkApi.tagging.getStats();
+        setTotalUntaggedCount(stats.totalUntaggedCount);
+        setTotalBookmarkCount(stats.totalBookmarkCount);
+        setLlmBookmarkCategorizationUrl(stats.llmBookmarkCategorizationUrl);
+        setLlmEnabled(stats.llmEnabled);
+      } catch (err) {
+        console.error('Failed to refresh stats:', err);
+      }
+
+      setTimeout(() => navigate('/'), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to auto-tag bookmarks');
+    } finally {
+      setIsAutoTagging(false);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
@@ -111,12 +150,12 @@ export default function Tagging() {
       setSuccess(null);
 
       const result = await bookmarkApi.tagging.applyResponse(llmResponse);
-      
+
       let message = `Successfully processed ${result.processed} bookmark(s) and tagged ${result.tagged} bookmark(s).`;
       if (result.errors && result.errors.length > 0) {
         message += ` ${result.errors.length} error(s) occurred.`;
       }
-      
+
       setSuccess(message);
       setLlmResponse('');
       setPrompt('');
@@ -127,6 +166,7 @@ export default function Tagging() {
         setTotalUntaggedCount(stats.totalUntaggedCount);
         setTotalBookmarkCount(stats.totalBookmarkCount);
         setLlmBookmarkCategorizationUrl(stats.llmBookmarkCategorizationUrl);
+        setLlmEnabled(stats.llmEnabled);
       } catch (err) {
         console.error('Failed to refresh stats:', err);
       }
@@ -178,7 +218,7 @@ export default function Tagging() {
         {/* Step 1: Generate Prompt */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <h2 className="text-xl font-bold text-gray-900 mb-4">Step 1: Generate Prompt</h2>
-          
+
           {isLoadingStats ? (
             <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
               <div className="text-sm text-gray-600">Loading tagging statistics...</div>
@@ -229,13 +269,24 @@ export default function Tagging() {
             />
           </div>
 
-          <button
-            onClick={handleGeneratePrompt}
-            disabled={isGenerating}
-            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {isGenerating ? 'Generating...' : 'Generate Prompt'}
-          </button>
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={handleGeneratePrompt}
+              disabled={isGenerating || isAutoTagging}
+              className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {isGenerating ? 'Generating...' : 'Generate Prompt'}
+            </button>
+            {llmEnabled && (
+              <button
+                onClick={handleAutoTag}
+                disabled={isGenerating || isAutoTagging || totalUntaggedCount === 0}
+                className="bg-emerald-600 text-white px-6 py-2 rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {isAutoTagging ? 'Tagging...' : 'Auto-Tag with LLM'}
+              </button>
+            )}
+          </div>
 
           {prompt && (
             <div ref={promptSectionRef} className="mt-6">
@@ -278,7 +329,7 @@ export default function Tagging() {
         {/* Step 2: Paste Response */}
         <div ref={pasteResponseSectionRef} className="bg-white rounded-lg shadow-md p-6 mb-6">
           <h2 className="text-xl font-bold text-gray-900 mb-4">Step 2: Paste LLM Response</h2>
-          
+
           <p className="text-sm text-gray-600 mb-4">
             After pasting the prompt into your LLM tool and getting a response, paste the response here:
           </p>
@@ -294,7 +345,7 @@ export default function Tagging() {
         {/* Step 3: Apply Tags */}
         <div className="bg-white rounded-lg shadow-md p-6">
           <h2 className="text-xl font-bold text-gray-900 mb-4">Step 3: Apply Tags</h2>
-          
+
           <p className="text-sm text-gray-600 mb-4">
             Click the button below to parse the LLM response and apply tags to your bookmarks.
           </p>
@@ -311,8 +362,14 @@ export default function Tagging() {
         {/* Instructions */}
         <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-6">
           <h3 className="text-lg font-semibold text-blue-900 mb-3">📋 Instructions</h3>
+          {llmEnabled && (
+            <p className="text-sm text-blue-800 mb-3 font-medium">
+              <strong>Quick path:</strong> Use &quot;Auto-Tag with LLM&quot; to tag bookmarks automatically (no copy/paste).
+            </p>
+          )}
+          <p className="text-sm text-blue-800 mb-2 font-medium">Manual path:</p>
           <ol className="list-decimal list-inside space-y-2 text-sm text-blue-800">
-            <li>Click "Generate Prompt" to create a prompt with untagged bookmarks</li>
+            <li>Click &quot;Generate Prompt&quot; to create a prompt with untagged bookmarks</li>
             <li>Copy the generated prompt</li>
             {llmBookmarkCategorizationUrl ? (
               <li>

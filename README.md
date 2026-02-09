@@ -16,7 +16,7 @@ Our initial focus is **top-of-funnel data capture**, not insight generation or d
 - 🔍 **Smart deduplication**: Automatic detection and prevention of duplicate entries with visual indicators
 - 🔄 **Change tracking**: Visual diff indicators showing what's changed in updated bookmarks (content, author)
 - 🏷️ **Tag management**: Customizable tag system with colors, descriptions, and manual/auto-tagging
-- 🤖 **LLM-powered tagging**: AI-assisted bulk categorization using ChatGPT/Grok for efficient tagging workflows
+- 🤖 **LLM-powered tagging**: AI-assisted bulk categorization with manual copy/paste or automated direct API integration (OpenRouter, Ollama, Groq, OpenAI, etc.)
 - 📊 **Dashboard**: View all collected items with search, filtering, sorting, and pagination
 - 🔎 **Full-text search**: Search across content, URLs, authors, and tags
 - 🎨 **Modern UI**: Built with React and Tailwind CSS
@@ -116,8 +116,19 @@ SAVED_BOOKMARKS_URL_X=https://x.com/i/bookmarks
 SAVED_BOOKMARKS_URL_REDDIT=https://www.reddit.com/user/YOUR_USERNAME/saved/
 SAVED_BOOKMARKS_URL_LINKEDIN=https://www.linkedin.com/my-items/saved-posts/
 
-# LLM Tagging (optional - link to your LLM categorization page)
+# LLM Tagging
+# Manual workflow: link to your LLM categorization page (ChatGPT, etc.)
 LLM_BOOKMARK_CATEGORIZATION_URL=https://chatgpt.com/c/YOUR_CHAT_ID
+
+# Direct LLM API (optional - enables "Auto-Tag with LLM" button)
+# Uses OpenAI-compatible chat completions; works with OpenRouter, Ollama, Groq, OpenAI, etc.
+# Set LLM_ENABLED=true and configure to enable automated tagging
+LLM_ENABLED=false
+LLM_API_BASE_URL=https://openrouter.ai/api/v1
+LLM_API_KEY=
+LLM_MODEL=google/gemini-2.0-flash-001
+LLM_MAX_TOKENS=4096
+LLM_TEMPERATURE=0.1
 ```
 
 ### 4. Initialize Database
@@ -190,12 +201,47 @@ The project includes sync scripts in `chrome-js-extension-scripts/`:
 - **Sync bookmarks**: Use browser scripts on saved posts pages (see Browser Script Setup)
 - **Add manually**: Use "Add Bookmark" button for URLs or raw text
 - **Manage tags**: Click tags to filter, use "+ Add tag" on bookmarks, or "Manage Tags" in header
-- **LLM tagging**: Generate prompt on LLM Tagging page, paste into ChatGPT/Grok, apply response
+- **LLM tagging**: Use the LLM Tagging page — either "Auto-Tag with LLM" (if configured) or the manual flow: generate prompt, paste into ChatGPT/Grok/Claude, apply response
 - **Search**: Search bar filters by content, URL, author, or tags; sort by date; pagination supported
 
 ## Project Structure
 
 Monorepo with `backend/` (Express + Prisma), `frontend/` (React + Vite), and `chrome-js-extension-scripts/` (browser sync scripts).
+
+## LLM API Integration
+
+The app supports two LLM tagging workflows:
+
+| Workflow | Requires | Use case |
+|----------|----------|----------|
+| **Manual** | `LLM_BOOKMARK_CATEGORIZATION_URL` (optional) | Copy prompt → paste into any LLM → paste response back. No API keys needed. |
+| **Automated** | `LLM_ENABLED=true`, `LLM_API_BASE_URL`, `LLM_MODEL`, `LLM_API_KEY` (optional for local) | One-click "Auto-Tag with LLM" — the backend calls the LLM directly and applies tags. |
+
+The automated flow uses the **OpenAI-compatible chat completions API**, so it works with any provider that supports that format. Suggested providers:
+
+| Provider | Base URL | Notes |
+|----------|----------|-------|
+| **OpenRouter** | `https://openrouter.ai/api/v1` | Single signup, 100+ models (GPT-4, Claude, Gemini, Llama), free tier available |
+| **Ollama** | `http://localhost:11434/v1` | Local, free, no API key — install [Ollama](https://ollama.ai) |
+| **Groq** | `https://api.groq.com/openai/v1` | Fast inference, free tier |
+| **OpenAI** | `https://api.openai.com/v1` | Direct OpenAI API |
+
+Example `.env` for OpenRouter (one key, many models):
+
+```env
+LLM_ENABLED=true
+LLM_API_BASE_URL=https://openrouter.ai/api/v1
+LLM_API_KEY=sk-or-v1-your-key
+LLM_MODEL=google/gemini-2.0-flash-001
+```
+
+Example for local Ollama (no API key):
+
+```env
+LLM_ENABLED=true
+LLM_API_BASE_URL=http://localhost:11434/v1
+LLM_MODEL=llama3.2
+```
 
 ## API Endpoints
 
@@ -204,8 +250,10 @@ Monorepo with `backend/` (Express + Prisma), `frontend/` (React + Vite), and `ch
 - `POST /api/bookmarks/check-duplicates` - Check for duplicates and changes
 - `GET /api/tags` - Get all tags
 - `POST /api/tags` - Create a tag
+- `GET /api/bookmarks/llm-tagging/stats` - Tagging stats (includes `llmEnabled` when direct API is configured)
 - `GET /api/bookmarks/llm-tagging/prompt` - Generate LLM tagging prompt
-- `POST /api/bookmarks/llm-tagging/apply` - Apply tags from LLM response
+- `POST /api/bookmarks/llm-tagging/apply` - Apply tags from LLM response (manual workflow)
+- `POST /api/bookmarks/llm-tagging/auto` - Auto-tag bookmarks via configured LLM
 
 ## Database Schema
 

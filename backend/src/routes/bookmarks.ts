@@ -542,6 +542,7 @@ router.delete('/:id/tags/:tagId', async (req: Request, res: Response) => {
 router.get('/llm-tagging/stats', async (_req: Request, res: Response) => {
   try {
     const { getUntaggedBookmarkCount, getTotalBookmarkCount } = await import('../services/promptGeneration');
+    const { isLLMConfigured } = await import('../services/llmService');
 
     const totalUntagged = await getUntaggedBookmarkCount();
     const totalBookmarks = await getTotalBookmarkCount();
@@ -551,6 +552,7 @@ router.get('/llm-tagging/stats', async (_req: Request, res: Response) => {
       totalUntaggedCount: totalUntagged,
       totalBookmarkCount: totalBookmarks,
       llmBookmarkCategorizationUrl: config.llmBookmarkCategorizationUrl,
+      llmEnabled: isLLMConfigured(),
     });
   } catch (error) {
     logger.error('Error getting tagging stats', error);
@@ -610,7 +612,7 @@ router.get('/llm-tagging/prompt', async (req: Request, res: Response) => {
 
 /**
  * POST /api/bookmarks/llm-tagging/apply
- * Apply tags from LLM response
+ * Apply tags from LLM response (manual paste workflow)
  */
 router.post('/llm-tagging/apply', async (req: Request, res: Response) => {
   try {
@@ -624,74 +626,10 @@ router.post('/llm-tagging/apply', async (req: Request, res: Response) => {
     }
 
     const { parseTaggingResponse } = await import('../services/promptGeneration');
-    const { getTagBySlug, addTagToBookmark } = await import('../services/tagService');
+    const { applyParsedTaggingResponse } = await import('../services/llmTaggingService');
 
-    // Parse the LLM response
     const parsed = parseTaggingResponse(llmResponse);
-
-    const results = {
-      processed: 0,
-      tagged: 0,
-      errors: [] as Array<{ bookmarkId: string; error: string }>,
-    };
-
-    // Apply tags to bookmarks
-    for (const item of parsed) {
-      try {
-        // Verify bookmark exists
-        const bookmark = await prisma.bookmark.findUnique({
-          where: { id: item.bookmarkId },
-        });
-
-        if (!bookmark) {
-          results.errors.push({
-            bookmarkId: item.bookmarkId,
-            error: 'Bookmark not found',
-          });
-          continue;
-        }
-
-        // Apply each tag
-        let tagApplied = false;
-        for (const tagSlug of item.tagSlugs) {
-          try {
-            const tag = await getTagBySlug(tagSlug);
-            if (!tag) {
-              logger.warn('Tag not found', { tagSlug, bookmarkId: item.bookmarkId });
-              continue;
-            }
-
-            await addTagToBookmark(item.bookmarkId, tag.id, true, null);
-            tagApplied = true;
-          } catch (tagError) {
-            logger.error('Error applying tag to bookmark', {
-              error: tagError,
-              bookmarkId: item.bookmarkId,
-              tagSlug,
-            });
-          }
-        }
-
-        // Mark bookmark as reviewed, regardless of whether tags were applied
-        // This prevents re-processing bookmarks that got no tags
-        await prisma.bookmark.update({
-          where: { id: item.bookmarkId },
-          data: {
-            taggingReviewedAt: new Date(),
-          },
-        });
-
-        if (tagApplied) {
-          results.tagged++;
-        }
-        results.processed++;
-      } catch (error) {
-        results.errors.push({
-          bookmarkId: item.bookmarkId,
-          error: error instanceof Error ? error.message : 'Unknown error',
-        });
-      }
-    }
+    const results = await applyParsedTaggingResponse(parsed);
 
     logger.info('Applied tags from LLM response', {
       processed: results.processed,
@@ -710,6 +648,35 @@ router.post('/llm-tagging/apply', async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Failed to apply tags',
+    });
+  }
+});
+
+/**
+ * POST /api/bookmarks/llm-tagging/auto
+ * Automatically tag bookmarks using the configured LLM (no manual paste)
+ */
+router.post('/llm-tagging/auto', async (req: Request, res: Response) => {
+  try {
+    const limit = parseInt((req.body?.limit as string) || '20', 10) || 20;
+
+    const { autoTagBookmarks } = await import('../services/llmTaggingService');
+    const result = await autoTagBookmarks(limit);
+
+    return res.json({
+      success: true,
+      processed: result.processed,
+      tagged: result.tagged,
+      errors: result.errors,
+      bookmarkCount: result.bookmarkCount,
+      totalUntaggedCount: result.totalUntaggedCount,
+      totalBookmarkCount: result.totalBookmarkCount,
+    });
+  } catch (error) {
+    logger.error('Error auto-tagging bookmarks', error);
+    return res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to auto-tag bookmarks',
     });
   }
 });

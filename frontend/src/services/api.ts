@@ -183,12 +183,13 @@ export const bookmarkApi = {
   // LLM-based tagging
   tagging: {
     // Get tagging statistics
-    getStats: async (): Promise<{ totalUntaggedCount: number; totalBookmarkCount: number; llmBookmarkCategorizationUrl: string }> => {
-      const response = await api.get<{ success: boolean; totalUntaggedCount: number; totalBookmarkCount: number; llmBookmarkCategorizationUrl: string }>('/bookmarks/llm-tagging/stats');
+    getStats: async (): Promise<{ totalUntaggedCount: number; totalBookmarkCount: number; llmBookmarkCategorizationUrl: string; llmEnabled: boolean }> => {
+      const response = await api.get<{ success: boolean; totalUntaggedCount: number; totalBookmarkCount: number; llmBookmarkCategorizationUrl: string; llmEnabled: boolean }>('/bookmarks/llm-tagging/stats');
       return {
         totalUntaggedCount: response.data.totalUntaggedCount,
         totalBookmarkCount: response.data.totalBookmarkCount,
         llmBookmarkCategorizationUrl: response.data.llmBookmarkCategorizationUrl,
+        llmEnabled: response.data.llmEnabled ?? false,
       };
     },
     // Generate prompt for LLM tagging
@@ -210,6 +211,18 @@ export const bookmarkApi = {
       return {
         processed: response.data.processed,
         tagged: response.data.tagged,
+        errors: response.data.errors,
+      };
+    },
+    // Auto-tag bookmarks using configured LLM (no manual paste)
+    autoTag: async (limit?: number): Promise<{ processed: number; tagged: number; bookmarkCount: number; totalUntaggedCount: number; totalBookmarkCount: number; errors?: Array<{ bookmarkId: string; error: string }> }> => {
+      const response = await api.post<{ success: boolean; processed: number; tagged: number; bookmarkCount: number; totalUntaggedCount: number; totalBookmarkCount: number; errors?: Array<{ bookmarkId: string; error: string }> }>('/bookmarks/llm-tagging/auto', { limit: limit ?? 20 });
+      return {
+        processed: response.data.processed,
+        tagged: response.data.tagged,
+        bookmarkCount: response.data.bookmarkCount,
+        totalUntaggedCount: response.data.totalUntaggedCount,
+        totalBookmarkCount: response.data.totalBookmarkCount,
         errors: response.data.errors,
       };
     },

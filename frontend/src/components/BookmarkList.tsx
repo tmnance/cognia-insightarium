@@ -433,7 +433,7 @@ function BookmarkItem({
                           />
                           <span>{tag.name}</span>
                           {tag.description && (
-                            <span className="text-xs text-gray-500 ml-auto truncate max-w-[150px]">
+                            <span className="text-xs text-gray-500 ml-auto truncate max-w-[150px]" title={tag.description || undefined}>
                               {tag.description}
                             </span>
                           )}
