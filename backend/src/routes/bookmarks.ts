@@ -339,7 +339,6 @@ router.get('/', async (req: Request, res: Response) => {
       tags: bookmark.tags.map(bt => ({
         ...bt.tag,
         autoTagged: bt.autoTagged,
-        confidence: bt.confidence,
       })),
     }));
 
@@ -479,7 +478,7 @@ router.post('/:id/tags', async (req: Request, res: Response) => {
       finalTagId = tag.id;
     }
 
-    const bookmarkTag = await addTagToBookmark(id, finalTagId, false, null);
+    const bookmarkTag = await addTagToBookmark(id, finalTagId, false);
 
     return res.json({
       success: true,

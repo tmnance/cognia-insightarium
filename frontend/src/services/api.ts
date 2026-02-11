@@ -14,7 +14,6 @@ export interface Tag {
   description?: string | null;
   color?: string | null;
   autoTagged?: boolean;
-  confidence?: number | null;
   bookmarkCount?: number;
 }
 

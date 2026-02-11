@@ -171,15 +171,13 @@ export async function getBookmarkTags(bookmarkId: string) {
       },
       orderBy: [
         { autoTagged: 'desc' }, // Auto-tagged first
-        { confidence: 'desc' }, // Higher confidence first
         { createdAt: 'asc' }, // Oldest first
       ],
     });
 
-    return bookmarkTags.map((bt: { id: string; autoTagged: boolean; confidence: number | null; tag: Tag }) => ({
+    return bookmarkTags.map((bt: { id: string; autoTagged: boolean; tag: Tag }) => ({
       ...bt.tag,
       autoTagged: bt.autoTagged,
-      confidence: bt.confidence,
       bookmarkTagId: bt.id,
     }));
   } catch (error) {
@@ -194,8 +192,7 @@ export async function getBookmarkTags(bookmarkId: string) {
 export async function addTagToBookmark(
   bookmarkId: string,
   tagId: string,
-  autoTagged: boolean = false,
-  confidence: number | null = null
+  autoTagged: boolean = false
 ) {
   try {
     // Check if relationship already exists
@@ -210,12 +207,11 @@ export async function addTagToBookmark(
 
     if (existing) {
       // Update if needed
-      if (existing.autoTagged !== autoTagged || existing.confidence !== confidence) {
+      if (existing.autoTagged !== autoTagged) {
         return await prisma.bookmarkTag.update({
           where: { id: existing.id },
           data: {
             autoTagged,
-            confidence,
           },
         });
       }
@@ -228,7 +224,6 @@ export async function addTagToBookmark(
         bookmarkId,
         tagId,
         autoTagged,
-        confidence,
       },
       include: {
         tag: true,
@@ -276,7 +271,6 @@ export async function addTagToBookmarks(
         bookmarkId,
         tagId,
         autoTagged: false,
-        confidence: null,
       })),
     });
 

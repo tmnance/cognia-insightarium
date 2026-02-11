@@ -63,7 +63,7 @@ export async function applyParsedTaggingResponse(
             continue;
           }
 
-          await addTagToBookmark(item.bookmarkId, tag.id, true, null);
+          await addTagToBookmark(item.bookmarkId, tag.id, true);
           tagApplied = true;
         } catch (tagError) {
           logger.error('Error applying tag to bookmark', {
