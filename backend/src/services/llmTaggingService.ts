@@ -14,10 +14,16 @@ import {
 } from './promptGeneration';
 import { addTagToBookmark, getTagBySlug } from './tagService';
 
+export interface TaggingDetail {
+  bookmarkId: string;
+  tagSlugs: string[];
+}
+
 export interface ApplyTaggingResult {
   processed: number;
   tagged: number;
   errors: Array<{ bookmarkId: string; error: string }>;
+  details: TaggingDetail[];
 }
 
 /**
@@ -31,6 +37,7 @@ export async function applyParsedTaggingResponse(
     processed: 0,
     tagged: 0,
     errors: [],
+    details: [],
   };
 
   for (const item of parsed) {
@@ -78,6 +85,10 @@ export async function applyParsedTaggingResponse(
         results.tagged++;
       }
       results.processed++;
+      results.details.push({
+        bookmarkId: item.bookmarkId,
+        tagSlugs: [...item.tagSlugs],
+      });
     } catch (error) {
       results.errors.push({
         bookmarkId: item.bookmarkId,
@@ -93,6 +104,7 @@ export interface AutoTagResult {
   processed: number;
   tagged: number;
   errors?: Array<{ bookmarkId: string; error: string }>;
+  details: TaggingDetail[];
   bookmarkCount: number;
   totalUntaggedCount: number;
   totalBookmarkCount: number;
@@ -130,6 +142,7 @@ export async function autoTagBookmarks(limit: number = 20): Promise<AutoTagResul
     processed: applyResult.processed,
     tagged: applyResult.tagged,
     errors: applyResult.errors.length > 0 ? applyResult.errors : undefined,
+    details: applyResult.details,
     bookmarkCount: promptResult.bookmarkCount,
     totalUntaggedCount: promptResult.totalUntaggedCount,
     totalBookmarkCount: promptResult.totalBookmarkCount,

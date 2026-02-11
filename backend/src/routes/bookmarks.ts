@@ -631,6 +631,25 @@ router.post('/llm-tagging/apply', async (req: Request, res: Response) => {
     const parsed = parseTaggingResponse(llmResponse);
     const results = await applyParsedTaggingResponse(parsed);
 
+    // Enrich details with bookmark content/url for results view
+    const detailsWithBookmarks = await Promise.all(
+      results.details.map(async (d) => {
+        const b = await prisma.bookmark.findUnique({
+          where: { id: d.bookmarkId },
+          select: { content: true, url: true },
+        });
+        const content = b?.content ?? null;
+        const truncated =
+          content && content.length > 150 ? content.slice(0, 150) + '...' : content;
+        return {
+          bookmarkId: d.bookmarkId,
+          tagSlugs: d.tagSlugs,
+          content: truncated,
+          url: b?.url ?? null,
+        };
+      })
+    );
+
     logger.info('Applied tags from LLM response', {
       processed: results.processed,
       tagged: results.tagged,
@@ -642,6 +661,7 @@ router.post('/llm-tagging/apply', async (req: Request, res: Response) => {
       processed: results.processed,
       tagged: results.tagged,
       errors: results.errors.length > 0 ? results.errors : undefined,
+      details: detailsWithBookmarks,
     });
   } catch (error) {
     logger.error('Error applying tags from LLM response', error);
@@ -663,11 +683,31 @@ router.post('/llm-tagging/auto', async (req: Request, res: Response) => {
     const { autoTagBookmarks } = await import('../services/llmTaggingService');
     const result = await autoTagBookmarks(limit);
 
+    // Enrich details with bookmark content/url for results view
+    const detailsWithBookmarks = await Promise.all(
+      result.details.map(async (d) => {
+        const b = await prisma.bookmark.findUnique({
+          where: { id: d.bookmarkId },
+          select: { content: true, url: true },
+        });
+        const content = b?.content ?? null;
+        const truncated =
+          content && content.length > 150 ? content.slice(0, 150) + '...' : content;
+        return {
+          bookmarkId: d.bookmarkId,
+          tagSlugs: d.tagSlugs,
+          content: truncated,
+          url: b?.url ?? null,
+        };
+      })
+    );
+
     return res.json({
       success: true,
       processed: result.processed,
       tagged: result.tagged,
       errors: result.errors,
+      details: detailsWithBookmarks,
       bookmarkCount: result.bookmarkCount,
       totalUntaggedCount: result.totalUntaggedCount,
       totalBookmarkCount: result.totalBookmarkCount,

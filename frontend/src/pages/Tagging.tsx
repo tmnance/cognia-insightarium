@@ -1,9 +1,18 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { bookmarkApi } from '../services/api';
+import { bookmarkApi, type TaggingResultDetail } from '../services/api';
 
 const SCROLL_DELAY_AFTER_COPY_MS = 600;
 const PROMPT_COPIED_DURATION_MS = 2000;
+
+export interface TaggingResultView {
+  processed: number;
+  tagged: number;
+  errors?: Array<{ bookmarkId: string; error: string }>;
+  details: TaggingResultDetail[];
+  totalUntaggedCount: number;
+  totalBookmarkCount: number;
+}
 
 export default function Tagging() {
   const navigate = useNavigate();
@@ -26,6 +35,8 @@ export default function Tagging() {
   const [success, setSuccess] = useState<string | null>(null);
   const [limit, setLimit] = useState<number>(20);
   const [promptJustCopied, setPromptJustCopied] = useState(false);
+  const [taggingResult, setTaggingResult] = useState<TaggingResultView | null>(null);
+  const [allTags, setAllTags] = useState<Array<{ slug: string; color?: string | null }>>([]);
 
   // Load stats on component mount
   useEffect(() => {
@@ -94,34 +105,35 @@ export default function Tagging() {
       setIsAutoTagging(true);
       setError(null);
       setSuccess(null);
+      setTaggingResult(null);
 
       const result = await bookmarkApi.tagging.autoTag(limit);
 
-      let message = `Successfully processed ${result.processed} bookmark(s) and tagged ${result.tagged} bookmark(s).`;
-      if (result.errors && result.errors.length > 0) {
-        message += ` ${result.errors.length} error(s) occurred.`;
-      }
-
-      setSuccess(message);
-      setTotalUntaggedCount(result.totalUntaggedCount);
-      setTotalBookmarkCount(result.totalBookmarkCount);
-
+      let stats = { totalUntaggedCount: 0, totalBookmarkCount: 0 };
       try {
-        const stats = await bookmarkApi.tagging.getStats();
-        setTotalUntaggedCount(stats.totalUntaggedCount);
-        setTotalBookmarkCount(stats.totalBookmarkCount);
-        setLlmBookmarkCategorizationUrl(stats.llmBookmarkCategorizationUrl);
-        setLlmEnabled(stats.llmEnabled);
+        const s = await bookmarkApi.tagging.getStats();
+        stats = { totalUntaggedCount: s.totalUntaggedCount, totalBookmarkCount: s.totalBookmarkCount };
+        setTotalUntaggedCount(s.totalUntaggedCount);
+        setTotalBookmarkCount(s.totalBookmarkCount);
+        setLlmBookmarkCategorizationUrl(s.llmBookmarkCategorizationUrl);
+        setLlmEnabled(s.llmEnabled);
       } catch (err) {
         console.error('Failed to refresh stats:', err);
       }
 
-      setTimeout(() => navigate('/'), 3000);
+      setTaggingResult({
+        processed: result.processed,
+        tagged: result.tagged,
+        errors: result.errors,
+        details: result.details,
+        totalUntaggedCount: stats.totalUntaggedCount,
+        totalBookmarkCount: stats.totalBookmarkCount,
+      });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to auto-tag bookmarks');
     } finally {
       setIsAutoTagging(false);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
@@ -148,21 +160,18 @@ export default function Tagging() {
       setIsApplying(true);
       setError(null);
       setSuccess(null);
+      setTaggingResult(null);
 
       const result = await bookmarkApi.tagging.applyResponse(llmResponse);
-
-      let message = `Successfully processed ${result.processed} bookmark(s) and tagged ${result.tagged} bookmark(s).`;
-      if (result.errors && result.errors.length > 0) {
-        message += ` ${result.errors.length} error(s) occurred.`;
-      }
-
-      setSuccess(message);
       setLlmResponse('');
       setPrompt('');
 
-      // Refresh stats after applying tags
+      let totalUntaggedCount = 0;
+      let totalBookmarkCount = 0;
       try {
         const stats = await bookmarkApi.tagging.getStats();
+        totalUntaggedCount = stats.totalUntaggedCount;
+        totalBookmarkCount = stats.totalBookmarkCount;
         setTotalUntaggedCount(stats.totalUntaggedCount);
         setTotalBookmarkCount(stats.totalBookmarkCount);
         setLlmBookmarkCategorizationUrl(stats.llmBookmarkCategorizationUrl);
@@ -171,17 +180,155 @@ export default function Tagging() {
         console.error('Failed to refresh stats:', err);
       }
 
-      // Navigate back to dashboard after a delay
-      setTimeout(() => {
-        navigate('/');
-      }, 3000);
+      setTaggingResult({
+        processed: result.processed,
+        tagged: result.tagged,
+        errors: result.errors,
+        details: result.details,
+        totalUntaggedCount,
+        totalBookmarkCount,
+      });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to apply tags');
     } finally {
       setIsApplying(false);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
+
+  const clearTaggingResult = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setTaggingResult(null);
+    setSuccess(null);
+    setError(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Load tags for result view (for slug -> color)
+  useEffect(() => {
+    if (!taggingResult) {
+      setAllTags([]);
+      return;
+    }
+    bookmarkApi.tags.getAll().then((tags) => {
+      setAllTags(tags.map((t) => ({ slug: t.slug, color: t.color })));
+    }).catch(() => setAllTags([]));
+  }, [taggingResult]);
+
+  // Results view after tagging (replaces redirect to dashboard)
+  if (taggingResult) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="container mx-auto px-4 py-8 max-w-4xl">
+          <header className="mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h1 className="text-4xl font-bold text-gray-900 mb-2">Tagging Results</h1>
+                <p className="text-gray-600">
+                  Processed {taggingResult.processed} bookmark{taggingResult.processed !== 1 ? 's' : ''}, added tags to {taggingResult.tagged}.
+                  {taggingResult.errors && taggingResult.errors.length > 0 && (
+                    <span className="text-amber-700 ml-1">
+                      {taggingResult.errors.length} error{taggingResult.errors.length !== 1 ? 's' : ''}.
+                    </span>
+                  )}
+                </p>
+              </div>
+            </div>
+          </header>
+
+          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Bookmarks tagged</h2>
+            {taggingResult.details.length === 0 ? (
+              <p className="text-gray-500">No bookmarks in this batch.</p>
+            ) : (
+              <ul className="space-y-4">
+                {taggingResult.details.map((d) => (
+                  <li
+                    key={d.bookmarkId}
+                    className="border border-gray-200 rounded-lg p-4 hover:border-gray-300 transition-colors"
+                  >
+                    <div className="flex flex-wrap items-center gap-2 mb-2">
+                      {d.tagSlugs.length > 0 ? (
+                        d.tagSlugs.map((slug) => {
+                          const tagMeta = allTags.find((t) => t.slug === slug);
+                          const color = tagMeta?.color;
+                          const style = color
+                            ? {
+                                backgroundColor: `${color}20`,
+                                color,
+                                borderColor: color,
+                                borderWidth: '1px',
+                                borderStyle: 'solid',
+                              }
+                            : undefined;
+                          return (
+                            <span
+                              key={slug}
+                              className="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium"
+                              style={style}
+                            >
+                              {slug}
+                            </span>
+                          );
+                        })
+                      ) : (
+                        <span className="text-gray-400 text-sm">No tags assigned</span>
+                      )}
+                    </div>
+                    {d.url && (
+                      <a
+                        href={d.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-800 text-sm break-all block mb-1"
+                      >
+                        {d.url}
+                      </a>
+                    )}
+                    {d.content && (
+                      <p className="text-sm text-gray-700 line-clamp-2">{d.content}</p>
+                    )}
+                    <p className="text-xs text-gray-400 mt-1 font-mono">ID: {d.bookmarkId}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {taggingResult.errors && taggingResult.errors.length > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
+              <h3 className="font-semibold text-amber-900 mb-2">Errors</h3>
+              <ul className="text-sm text-amber-800 space-y-1">
+                {taggingResult.errors.map((e, i) => (
+                  <li key={i}>
+                    {e.bookmarkId}: {e.error}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-3">
+            <a
+              href="/"
+              className="px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors font-medium inline-block"
+            >
+              Back to Dashboard
+            </a>
+            {taggingResult.totalUntaggedCount > 0 && (
+              <a
+                href="/tagging"
+                onClick={clearTaggingResult}
+                className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium inline-block"
+              >
+                Tag more untagged bookmarks ({taggingResult.totalUntaggedCount} remaining)
+              </a>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">

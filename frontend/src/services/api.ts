@@ -46,6 +46,13 @@ export interface SavedBookmarkUrl {
   url: string;
 }
 
+export interface TaggingResultDetail {
+  bookmarkId: string;
+  tagSlugs: string[];
+  content?: string | null;
+  url?: string | null;
+}
+
 export const configApi = {
   getConfig: async (): Promise<{ savedBookmarkUrls: SavedBookmarkUrl[] }> => {
     const response = await api.get<{ success: boolean; savedBookmarkUrls: SavedBookmarkUrl[] }>('/config');
@@ -249,17 +256,50 @@ export const bookmarkApi = {
       };
     },
     // Apply tags from LLM response
-    applyResponse: async (llmResponse: string): Promise<{ processed: number; tagged: number; errors?: Array<{ bookmarkId: string; error: string }> }> => {
-      const response = await api.post<{ success: boolean; processed: number; tagged: number; errors?: Array<{ bookmarkId: string; error: string }> }>('/bookmarks/llm-tagging/apply', { llmResponse });
+    applyResponse: async (
+      llmResponse: string
+    ): Promise<{
+      processed: number;
+      tagged: number;
+      errors?: Array<{ bookmarkId: string; error: string }>;
+      details: TaggingResultDetail[];
+    }> => {
+      const response = await api.post<{
+        success: boolean;
+        processed: number;
+        tagged: number;
+        errors?: Array<{ bookmarkId: string; error: string }>;
+        details: TaggingResultDetail[];
+      }>('/bookmarks/llm-tagging/apply', { llmResponse });
       return {
         processed: response.data.processed,
         tagged: response.data.tagged,
         errors: response.data.errors,
+        details: response.data.details ?? [],
       };
     },
     // Auto-tag bookmarks using configured LLM (no manual paste)
-    autoTag: async (limit?: number): Promise<{ processed: number; tagged: number; bookmarkCount: number; totalUntaggedCount: number; totalBookmarkCount: number; errors?: Array<{ bookmarkId: string; error: string }> }> => {
-      const response = await api.post<{ success: boolean; processed: number; tagged: number; bookmarkCount: number; totalUntaggedCount: number; totalBookmarkCount: number; errors?: Array<{ bookmarkId: string; error: string }> }>('/bookmarks/llm-tagging/auto', { limit: limit ?? 20 });
+    autoTag: async (
+      limit?: number
+    ): Promise<{
+      processed: number;
+      tagged: number;
+      bookmarkCount: number;
+      totalUntaggedCount: number;
+      totalBookmarkCount: number;
+      errors?: Array<{ bookmarkId: string; error: string }>;
+      details: TaggingResultDetail[];
+    }> => {
+      const response = await api.post<{
+        success: boolean;
+        processed: number;
+        tagged: number;
+        bookmarkCount: number;
+        totalUntaggedCount: number;
+        totalBookmarkCount: number;
+        errors?: Array<{ bookmarkId: string; error: string }>;
+        details: TaggingResultDetail[];
+      }>('/bookmarks/llm-tagging/auto', { limit: limit ?? 20 });
       return {
         processed: response.data.processed,
         tagged: response.data.tagged,
@@ -267,6 +307,7 @@ export const bookmarkApi = {
         totalUntaggedCount: response.data.totalUntaggedCount,
         totalBookmarkCount: response.data.totalBookmarkCount,
         errors: response.data.errors,
+        details: response.data.details ?? [],
       };
     },
   },
