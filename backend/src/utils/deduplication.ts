@@ -60,7 +60,17 @@ export async function findExistingBookmark(data: BookmarkData) {
 }
 
 /**
+ * Check if author string represents a deleted user (Reddit uses [deleted] or @[deleted])
+ */
+export function isDeletedAuthor(author: string | null | undefined): boolean {
+  if (!author) return false;
+  const normalized = author.trim().toLowerCase();
+  return normalized === '[deleted]' || normalized === '@[deleted]';
+}
+
+/**
  * Update an existing bookmark with new data
+ * Note: Never updates author to [deleted] or @[deleted] (preserves existing author)
  */
 export async function updateBookmark(bookmarkId: string, data: Partial<BookmarkData>) {
   const now = new Date();
@@ -77,7 +87,8 @@ export async function updateBookmark(bookmarkId: string, data: Partial<BookmarkD
   if (data.content !== undefined) {
     updateData.content = data.content;
   }
-  if (data.author !== undefined) {
+  // Only update author if it's not a deleted author marker
+  if (data.author !== undefined && !isDeletedAuthor(data.author)) {
     updateData.author = data.author;
   }
   if (sourceCreatedAt !== undefined) {

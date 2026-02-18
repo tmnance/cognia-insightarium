@@ -1,6 +1,6 @@
 import express, { Request, Response } from 'express';
 import { fetchUrlContent } from '../services/urlFetcher';
-import { createBookmarkIfNotExists, findExistingBookmark, updateBookmark } from '../utils/deduplication';
+import { createBookmarkIfNotExists, findExistingBookmark, updateBookmark, isDeletedAuthor } from '../utils/deduplication';
 import { logger } from '../utils/logger';
 import { prisma } from '../db/prismaClient';
 import { config } from '../config/env';
@@ -166,7 +166,8 @@ router.post('/check-duplicates', async (req: Request, res: Response) => {
         const newAuthor = normalizeAuthor(item.author);
 
         const contentChanged = newContent !== null && existing.content !== newContent;
-        const authorChanged = newAuthor !== null && existing.author !== newAuthor;
+        // Ignore author changes when new author is [deleted] (preserve existing author)
+        const authorChanged = newAuthor !== null && existing.author !== newAuthor && !isDeletedAuthor(newAuthor);
 
         if (contentChanged || authorChanged) {
           changedIndices.push(i);
