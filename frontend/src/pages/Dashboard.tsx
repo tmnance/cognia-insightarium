@@ -24,6 +24,7 @@ export default function Dashboard() {
   const [syncDropdownOpen, setSyncDropdownOpen] = useState(false);
   const syncDropdownRef = useRef<HTMLDivElement>(null);
   const isInitializingFromUrl = useRef(true);
+  const hasLoadedBookmarksOnce = useRef(false);
 
   // Filtering, sorting, and pagination state
   const [searchQuery, setSearchQuery] = useState('');
@@ -61,10 +62,10 @@ export default function Dashboard() {
       }
     }
 
-    // Mark initialization as complete after a brief delay to allow state updates
+    // Mark initialization as complete after state updates and any init-triggered re-renders settle
     setTimeout(() => {
       isInitializingFromUrl.current = false;
-    }, 100);
+    }, 300);
   }, []); // Only run on mount
 
   // Update URL params when state changes (using replace to avoid cluttering history)
@@ -119,7 +120,7 @@ export default function Dashboard() {
     }
   };
 
-  const loadBookmarks = async () => {
+  const loadBookmarks = async (options?: { resetPage?: boolean }) => {
     try {
       setIsLoading(true);
       setError(null);
@@ -144,7 +145,10 @@ export default function Dashboard() {
         // Don't store unfilteredData - we only needed it for the count
       }
 
-      setCurrentPage(1); // Reset to first page when filters change
+      // Reset to first page only when filters changed (not on initial load, preserves ?page= from URL)
+      if (options?.resetPage) {
+        setCurrentPage(1);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load bookmarks');
     } finally {
@@ -260,7 +264,10 @@ export default function Dashboard() {
   useEffect(() => {
     // Clear pinned bookmarks when tag filters change
     setPinnedBookmarkIds(new Set());
-    loadBookmarks();
+    // Only reset page when filters change (not during init from URL), so ?page= in URL is preserved
+    const resetPage = hasLoadedBookmarksOnce.current && !isInitializingFromUrl.current;
+    loadBookmarks({ resetPage });
+    hasLoadedBookmarksOnce.current = true;
   }, [selectedTags]);
 
   // Close sync dropdown when clicking outside
