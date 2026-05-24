@@ -259,6 +259,34 @@ LLM_MODEL=llama3.2
 
 Uses Prisma with PostgreSQL. Main models: `Bookmark` (stores content with source, URL, author, timestamps), `Tag` (categorization), and `BookmarkTag` (many-to-many relationship with auto-tagging support).
 
+## Database Backup
+
+Create a timestamped PostgreSQL dump of your local database. Requires `backend/.env` with `DATABASE_URL` and PostgreSQL client tools (`pg_dump` on your PATH).
+
+From the repo root:
+
+```bash
+npm run backup:db
+```
+
+Or from the backend directory:
+
+```bash
+cd backend && npm run backup:db
+```
+
+Backup files are written to [`backups/`](backups/) with names like `cognia_insightarium_YYYYMMDD_HHMMSS.dump`. They use PostgreSQL's custom format (compressed), which supports selective restore and smaller file sizes than plain SQL.
+
+To restore a backup (example — adjust host, port, user, and filename):
+
+```bash
+pg_restore -h localhost -p 5432 -U postgres -d cognia_insightarium --clean --if-exists backups/cognia_insightarium_YYYYMMDD_HHMMSS.dump
+```
+
+**Warning**: `--clean --if-exists` drops existing database objects before restoring. Use with caution. See [backups/README.md](backups/README.md) for more restore options.
+
+The `backups/` directory is gitignored. Copy dumps elsewhere if you need long-term retention.
+
 ## Deduplication and Change Tracking
 
 Prevents duplicates by checking `source` + `externalId` (primary) or `url` (fallback). When a bookmark exists, compares content and author. Changed items are marked as "Updated" with visual diff indicators; unchanged items are marked as "Duplicate" and skipped.
@@ -268,6 +296,7 @@ Prevents duplicates by checking `source` + `externalId` (primary) or `url` (fall
 - `npm run dev` - Start both backend and frontend
 - `npm run lint` - Lint codebase
 - `npm run format` - Format codebase
+- `npm run backup:db` - Create a timestamped PostgreSQL dump in `backups/`
 - `npx prisma migrate dev --name <name>` - Create database migration
 - `npx prisma studio` - Open Prisma Studio (database GUI)
 

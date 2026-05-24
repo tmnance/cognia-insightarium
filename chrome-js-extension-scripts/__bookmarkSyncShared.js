@@ -15,6 +15,157 @@ window.__bookmarkSyncShared = (() => {
 
   let config = null;
 
+  // ------ NETWORK INTERCEPTORS (GENERIC) ------
+  // Alternative to DOM scraping: register handlers for XHR/fetch JSON responses (e.g. saved/bookmark API).
+
+  const networkHandlers = {
+    xhr: [],
+    fetch: [],
+  };
+
+  let didInstallXhrInterceptor = false;
+  let didInstallFetchInterceptor = false;
+
+  /** Shared: run handlers that match context; getResult() returns parsed JSON or null. */
+  const runJsonHandlers = (handlers, context, getResult) => {
+    let result = null;
+    try {
+      result = getResult();
+    } catch {
+      return;
+    }
+    if (result === null || result === undefined) return;
+
+    for (const h of handlers) {
+      let isMatch = false;
+      try {
+        isMatch = !!h.match?.(context.url, context.method, context.request);
+      } catch {
+        isMatch = false;
+      }
+      if (!isMatch) continue;
+      try {
+        h.callback?.(result, context);
+      } catch {
+        // swallow handler errors so we never break the page
+      }
+    }
+  };
+
+  /** Shared: async version for fetch (getResult may be async). */
+  const runJsonHandlersAsync = async (handlers, context, getResult) => {
+    let result = null;
+    try {
+      result = await Promise.resolve(getResult());
+    } catch {
+      return;
+    }
+    if (result === null || result === undefined) return;
+
+    for (const h of handlers) {
+      let isMatch = false;
+      try {
+        isMatch = !!h.match?.(context.url, context.method, context.request);
+      } catch {
+        isMatch = false;
+      }
+      if (!isMatch) continue;
+      try {
+        h.callback?.(result, context);
+      } catch {
+        // swallow handler errors
+      }
+    }
+  };
+
+  const registerXhrJsonHandler = ({ match, callback }) => {
+    networkHandlers.xhr.push({ match, callback });
+    if (!didInstallXhrInterceptor) installXhrInterceptor();
+  };
+
+  const registerFetchJsonHandler = ({ match, callback }) => {
+    networkHandlers.fetch.push({ match, callback });
+    if (!didInstallFetchInterceptor) installFetchInterceptor();
+  };
+
+  const installXhrInterceptor = () => {
+    didInstallXhrInterceptor = true;
+
+    const OriginalXHR = window.XMLHttpRequest;
+    if (!OriginalXHR) return;
+
+    window.XMLHttpRequest = function WrappedXHR() {
+      const xhr = new OriginalXHR();
+      let url = '';
+      let method = 'GET';
+
+      const origOpen = xhr.open;
+      xhr.open = function (m, u) {
+        method = (m || 'GET').toUpperCase();
+        url = u || '';
+        return origOpen.apply(xhr, arguments);
+      };
+
+      xhr.addEventListener('load', () => {
+        try {
+          if (!url) return;
+          const context = { url, method, status: xhr.status, request: xhr };
+          const getResult = () => {
+            const text = xhr.responseText;
+            const first = text?.trim()[0];
+            if (!text || (first !== '{' && first !== '[')) return null;
+            try {
+              return JSON.parse(text);
+            } catch {
+              return null;
+            }
+          };
+          runJsonHandlers(networkHandlers.xhr, context, getResult);
+        } catch {
+          // ignore
+        }
+      });
+
+      return xhr;
+    };
+
+    Object.assign(window.XMLHttpRequest, OriginalXHR);
+  };
+
+  const installFetchInterceptor = () => {
+    didInstallFetchInterceptor = true;
+
+    const originalFetch = window.fetch;
+    if (!originalFetch) return;
+
+    window.fetch = async function (input, init) {
+      const resp = await originalFetch.apply(this, arguments);
+
+      try {
+        const url = typeof input === 'string' ? input : input?.url;
+        const method = (init?.method || input?.method || 'GET').toUpperCase();
+        if (!url) return resp;
+
+        const context = { url, method, status: resp.status, request: resp };
+        const getResult = async () => {
+          const clone = resp.clone();
+          const ct = (clone.headers.get('content-type') || '').toLowerCase();
+          if (!ct.includes('application/json')) return null;
+          try {
+            return await clone.json();
+          } catch {
+            return null;
+          }
+        };
+        await runJsonHandlersAsync(networkHandlers.fetch, context, getResult);
+      } catch {
+        // ignore
+      }
+
+      return resp;
+    };
+  };
+
   const htmlToMarkdown = (wrapperEl) => {
     const processNode = (node) => {
       if (node.nodeType === Node.TEXT_NODE) {
@@ -347,6 +498,9 @@ window.__bookmarkSyncShared = (() => {
     processedItemIds,
     pendingNewBookmarks,
     sentBookmarksCount,
+    // Network interceptors: register handlers to derive bookmarks from XHR/fetch JSON (alternative to DOM scraping)
+    registerXhrJsonHandler,
+    registerFetchJsonHandler,
   };
   return shared;
 })();

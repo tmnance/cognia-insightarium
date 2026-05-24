@@ -4,19 +4,25 @@ This directory contains database backups created by the backup script.
 
 ## Creating a Backup
 
-From the backend directory:
+From the repo root:
 
 ```bash
 npm run backup:db
 ```
 
-Or using the script directly:
+Or from the backend directory:
+
+```bash
+npm run backup:db
+```
+
+Or using the script directly (from `backend/`):
 
 ```bash
 node scripts/backup-db.mjs
 ```
 
-Or using the bash script:
+Or using the bash script (from `backend/`):
 
 ```bash
 ./scripts/backup-db.sh

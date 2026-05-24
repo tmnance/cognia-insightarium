@@ -17,6 +17,7 @@
     "format": "npm run format:backend && npm run format:frontend",
     "format:backend": "cd backend && npm run format",
     "format:frontend": "cd frontend && npm run format",
+    "backup:db": "cd backend && npm run backup:db",
     "prepare": "husky"
   },
   "devDependencies": {
