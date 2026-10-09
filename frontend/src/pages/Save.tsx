@@ -41,11 +41,11 @@ function BookmarkItem({ bookmark, isDuplicate, isChanged, changeDetail, isExpand
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-2 flex-wrap">
-            <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-semibold rounded">
+            <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-semibold rounded-sm">
               {bookmark.platform.toUpperCase()}
             </span>
             {isDuplicate && (
-              <span className="px-2 py-1 bg-amber-200 text-amber-800 text-xs font-semibold rounded flex items-center gap-1">
+              <span className="px-2 py-1 bg-amber-200 text-amber-800 text-xs font-semibold rounded-sm flex items-center gap-1">
                 <svg
                   className="w-3 h-3"
                   fill="none"
@@ -63,7 +63,7 @@ function BookmarkItem({ bookmark, isDuplicate, isChanged, changeDetail, isExpand
               </span>
             )}
             {isChanged && (
-              <span className="px-2 py-1 bg-blue-200 text-blue-800 text-xs font-semibold rounded flex items-center gap-1" title={changeDetail?.fields ? `Changed: ${changeDetail.fields.join(', ')}` : 'Updated'}>
+              <span className="px-2 py-1 bg-blue-200 text-blue-800 text-xs font-semibold rounded-sm flex items-center gap-1" title={changeDetail?.fields ? `Changed: ${changeDetail.fields.join(', ')}` : 'Updated'}>
                 <svg
                   className="w-3 h-3"
                   fill="none"
@@ -84,11 +84,11 @@ function BookmarkItem({ bookmark, isDuplicate, isChanged, changeDetail, isExpand
               <span className="text-sm text-gray-600">
                 {hasAuthorChanges && changeDetail?.existingAuthor ? (
                   <>
-                    <span className="bg-red-100 text-red-800 line-through px-1 rounded text-xs">
+                    <span className="bg-red-100 text-red-800 line-through px-1 rounded-sm text-xs">
                       @{normalizeAuthor(changeDetail.existingAuthor)}
                     </span>
                     {' → '}
-                    <span className="bg-green-100 text-green-800 px-1 rounded text-xs">
+                    <span className="bg-green-100 text-green-800 px-1 rounded-sm text-xs">
                       @{normalizeAuthor(bookmark.author)}
                     </span>
                   </>
@@ -120,7 +120,7 @@ function BookmarkItem({ bookmark, isDuplicate, isChanged, changeDetail, isExpand
               {hasContentChanges ? (
                 <div className="space-y-2">
                   {isExpanded && changeDetail?.existingContent && (
-                    <div className="p-2 bg-red-50 border border-red-200 rounded">
+                    <div className="p-2 bg-red-50 border border-red-200 rounded-sm">
                       <p className="text-xs text-red-700 font-medium mb-1">Previous:</p>
                       <p className="text-sm text-red-800 line-through whitespace-pre-wrap">
                         {changeDetail.existingContent}
@@ -136,12 +136,12 @@ function BookmarkItem({ bookmark, isDuplicate, isChanged, changeDetail, isExpand
                     {isExpanded && changeDetail?.existingContent ? (
                       <>
                         <p className="text-xs text-green-700 font-medium mb-1">Updated:</p>
-                        <p className="text-gray-700 bg-green-50 border border-green-200 px-2 py-1 rounded">
+                        <p className="text-gray-700 bg-green-50 border border-green-200 px-2 py-1 rounded-sm">
                           {bookmark.text}
                         </p>
                       </>
                     ) : (
-                      <span className="bg-green-50 border border-green-200 px-1 rounded">
+                      <span className="bg-green-50 border border-green-200 px-1 rounded-sm">
                         {bookmark.text}
                       </span>
                     )}
@@ -167,7 +167,7 @@ function BookmarkItem({ bookmark, isDuplicate, isChanged, changeDetail, isExpand
               )}
             </div>
           )}
-          
+
           {isChanged && changeDetail?.fields && changeDetail.fields.length > 0 && (
             <div className="mt-3 pt-3 border-t border-blue-200">
               <p className="text-xs text-blue-700 font-medium mb-2">Changes detected:</p>
@@ -323,8 +323,8 @@ export default function Save() {
 
       if (result.saved > 0) {
         setSuccessMessage(
-          `Successfully saved ${newCount} new bookmark${newCount > 1 ? 's' : ''}` + 
-          `${updatedCount > 0 ? ` and updated ${updatedCount} existing bookmark${updatedCount > 1 ? 's' : ''}` : ''}` + 
+          `Successfully saved ${newCount} new bookmark${newCount > 1 ? 's' : ''}` +
+          `${updatedCount > 0 ? ` and updated ${updatedCount} existing bookmark${updatedCount > 1 ? 's' : ''}` : ''}` +
           `${result.failed > 0 ? ` (${result.failed} failed)` : ''}`
         );
 
@@ -422,7 +422,7 @@ export default function Save() {
 
               <div className="border-t pt-6">
                 <p className="text-sm text-gray-400 mb-2">Expected message format:</p>
-                <pre className="bg-gray-100 px-4 py-2 rounded text-xs text-left overflow-auto">
+                <pre className="bg-gray-100 px-4 py-2 rounded-sm text-xs text-left overflow-auto">
 {`window.postMessage({
   bookmarksToSave: [{
     platform: "x", // "x", "reddit", "linkedin", etc

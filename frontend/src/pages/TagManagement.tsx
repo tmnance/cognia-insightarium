@@ -296,7 +296,7 @@ export default function TagManagement() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g. Health & Fitness"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 maxLength={100}
               />
             </div>
@@ -307,7 +307,7 @@ export default function TagManagement() {
                 value={slug}
                 onChange={(e) => setSlug(e.target.value)}
                 placeholder="e.g. health-fitness"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
                 maxLength={100}
               />
               <p className="mt-1 text-xs text-gray-500">
@@ -323,7 +323,7 @@ export default function TagManagement() {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Short description for this tag"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 maxLength={500}
               />
             </div>
@@ -337,13 +337,13 @@ export default function TagManagement() {
                   value={color}
                   onChange={(e) => setColor(e.target.value)}
                   placeholder="#3b82f6"
-                  className="w-32 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+                  className="w-32 px-3 py-2 border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
                 />
                 <input
                   type="color"
                   value={normalizeHex(color) || '#000000'}
                   onChange={(e) => setColor(e.target.value)}
-                  className="w-10 h-10 cursor-pointer rounded border border-gray-300 p-0 flex-shrink-0"
+                  className="w-10 h-10 cursor-pointer rounded-sm border border-gray-300 p-0 shrink-0"
                   title="Pick color"
                   aria-label="Pick color"
                 />
@@ -410,7 +410,7 @@ export default function TagManagement() {
                             type="text"
                             value={editName}
                             onChange={(e) => setEditName(e.target.value)}
-                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                             maxLength={100}
                             required
                           />
@@ -421,7 +421,7 @@ export default function TagManagement() {
                             type="text"
                             value={editSlug}
                             onChange={(e) => setEditSlug(e.target.value)}
-                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500 font-mono"
                             maxLength={100}
                             required
                           />
@@ -433,7 +433,7 @@ export default function TagManagement() {
                           type="text"
                           value={editDescription}
                           onChange={(e) => setEditDescription(e.target.value)}
-                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                           maxLength={500}
                         />
                       </div>
@@ -445,13 +445,13 @@ export default function TagManagement() {
                             value={editColor}
                             onChange={(e) => setEditColor(e.target.value)}
                             placeholder="#3b82f6"
-                            className="w-24 px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                            className="w-24 px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500 font-mono"
                           />
                           <input
                             type="color"
                             value={normalizeHex(editColor) || '#000000'}
                             onChange={(e) => setEditColor(e.target.value)}
-                            className="w-8 h-8 cursor-pointer rounded border border-gray-300 p-0 flex-shrink-0"
+                            className="w-8 h-8 cursor-pointer rounded-sm border border-gray-300 p-0 shrink-0"
                             title="Pick color"
                             aria-label="Pick color"
                           />
@@ -461,7 +461,7 @@ export default function TagManagement() {
                         <button
                           type="submit"
                           disabled={isUpdating}
-                          className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          className="px-3 py-1 text-sm bg-blue-600 text-white rounded-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         >
                           {isUpdating ? 'Saving...' : 'Save'}
                         </button>
@@ -469,7 +469,7 @@ export default function TagManagement() {
                           type="button"
                           onClick={cancelEdit}
                           disabled={isUpdating}
-                          className="px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          className="px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded-sm hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         >
                           Cancel
                         </button>
@@ -479,7 +479,7 @@ export default function TagManagement() {
                     <>
                       {tag.color && (
                         <span
-                          className="w-4 h-4 rounded flex-shrink-0"
+                          className="w-4 h-4 rounded-sm shrink-0"
                           style={{ backgroundColor: tag.color }}
                           title={toHexWithHash(tag.color)}
                           aria-hidden
@@ -493,14 +493,14 @@ export default function TagManagement() {
                         )}
                       </div>
                       {tag.bookmarkCount !== undefined && (
-                        <span className="text-sm text-gray-500 flex-shrink-0">
+                        <span className="text-sm text-gray-500 shrink-0">
                           {tag.bookmarkCount} bookmark{tag.bookmarkCount !== 1 ? 's' : ''}
                         </span>
                       )}
-                      <div className="flex gap-1 flex-shrink-0 items-center">
+                      <div className="flex gap-1 shrink-0 items-center">
                         <button
                           onClick={() => startCopyAssignment(tag)}
-                          className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                          className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-sm transition-colors"
                           title="Copy tag assignment"
                           aria-label="Copy tag assignment"
                         >
@@ -515,7 +515,7 @@ export default function TagManagement() {
                         </button>
                         <button
                           onClick={() => startEdit(tag)}
-                          className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                          className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-sm transition-colors"
                           title="Edit tag"
                           aria-label="Edit tag"
                         >
@@ -530,7 +530,7 @@ export default function TagManagement() {
                         </button>
                         <button
                           onClick={() => startDelete(tag)}
-                          className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                          className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-sm transition-colors"
                           title="Delete tag"
                           aria-label="Delete tag"
                         >
@@ -554,7 +554,7 @@ export default function TagManagement() {
 
         {/* Delete confirmation modal */}
         {deletingTag && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
               <h3 className="text-lg font-bold text-gray-900 mb-2">Delete Tag</h3>
               <p className="text-gray-700 mb-4">
@@ -587,7 +587,7 @@ export default function TagManagement() {
 
         {/* Copy tag assignment modal */}
         {copyFromTag && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
               <h3 className="text-lg font-bold text-gray-900 mb-2">Copy tag assignment</h3>
               <div className="space-y-4 mb-4">
@@ -596,7 +596,7 @@ export default function TagManagement() {
                   <select
                     value={copyToId}
                     onChange={(e) => setCopyToId(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
                   >
                     <option value="">Select a tag...</option>
                     {tags

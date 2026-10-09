@@ -465,7 +465,7 @@ export default function Dashboard() {
           <div className="flex gap-3 items-center flex-wrap">
             <button
               onClick={() => setIsAddBookmarkModalOpen(true)}
-              className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium shadow-sm"
+              className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium shadow-xs"
             >
               + Add Bookmark
             </button>
@@ -474,7 +474,7 @@ export default function Dashboard() {
                 <button
                   type="button"
                   onClick={() => setSyncDropdownOpen((open) => !open)}
-                  className="py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition-colors font-medium shadow-sm flex items-stretch overflow-hidden"
+                  className="py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition-colors font-medium shadow-xs flex items-stretch overflow-hidden"
                 >
                   <span className="pl-4 pr-3 flex items-center">Sync Bookmarks</span>
                   <span className="flex items-center border-l border-sky-500/50 px-3">
@@ -508,13 +508,13 @@ export default function Dashboard() {
             )}
             <button
               onClick={() => navigate('/tags')}
-              className="px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors font-medium shadow-sm"
+              className="px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors font-medium shadow-xs"
             >
               Manage Tags
             </button>
             <button
               onClick={() => navigate('/tagging')}
-              className="px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors font-medium shadow-sm"
+              className="px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors font-medium shadow-xs"
             >
               🤖 LLM Tagging
             </button>

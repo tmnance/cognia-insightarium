@@ -398,7 +398,7 @@ function BookmarkItem({
                     setSelectedTagIndex(0);
                   }}
                   placeholder="Filter tags..."
-                  className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                   onKeyDown={(e) => {
                     // Prevent form submission if this is inside a form
                     if (e.key === 'Enter') {

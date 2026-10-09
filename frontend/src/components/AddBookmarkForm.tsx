@@ -99,10 +99,10 @@ export default function AddBookmarkForm({ isOpen, onClose, onBookmarkAdded }: Ad
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity"
+        className="fixed inset-0 bg-black/50 z-40 transition-opacity"
         onClick={onClose}
       />
-      
+
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div
@@ -167,12 +167,12 @@ export default function AddBookmarkForm({ isOpen, onClose, onBookmarkAdded }: Ad
             </div>
 
                   {error && (
-              <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+              <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-sm">
                 {error}
               </div>
             )}
             {success && (
-              <div className="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded">
+              <div className="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded-sm">
                 {success}
               </div>
             )}

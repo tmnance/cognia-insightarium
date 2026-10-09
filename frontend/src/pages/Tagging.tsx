@@ -264,7 +264,7 @@ export default function Tagging() {
                           return (
                             <span
                               key={slug}
-                              className="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium"
+                              className="inline-flex items-center px-2.5 py-0.5 rounded-sm text-xs font-medium"
                               style={style}
                             >
                               {slug}
@@ -412,7 +412,7 @@ export default function Tagging() {
               max="50"
               value={limit}
               onChange={(e) => setLimit(parseInt(e.target.value) || 20)}
-              className="w-32 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-32 px-3 py-2 border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
@@ -485,7 +485,7 @@ export default function Tagging() {
             value={llmResponse}
             onChange={(e) => setLlmResponse(e.target.value)}
             placeholder="Paste the LLM response here (JSON format)..."
-            className="w-full h-48 p-4 border border-gray-300 rounded-lg font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full h-48 p-4 border border-gray-300 rounded-lg font-mono text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
           />
         </div>
 
